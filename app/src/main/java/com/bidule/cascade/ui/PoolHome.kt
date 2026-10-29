@@ -125,9 +125,12 @@ fun PoolHome(
         modifier
             .fillMaxSize()
             .pointerInput(Unit) {
+                // Tracked synchronously so the release decision never waits on the animation.
+                var total = 0f
                 detectVerticalDragGestures(
+                    onDragStart = { total = 0f },
                     onDragEnd = {
-                        val v = pull.value
+                        val v = total
                         when {
                             v < -thresholdPx -> onPullUp()
                             v > thresholdPx -> onPullDown()
@@ -137,6 +140,7 @@ fun PoolHome(
                     onDragCancel = { scope.launch { pull.animateTo(0f, Motion.liquid) } },
                     onVerticalDrag = { change, dy ->
                         change.consume()
+                        total += dy * 0.6f
                         // Resistance makes the water feel heavy.
                         scope.launch { pull.snapTo(pull.value + dy * 0.6f) }
                     },
@@ -231,7 +235,7 @@ private fun poolLayout(radii: List<Float>, w: Float, h: Float, labelPx: Float): 
         xs[i] = cx + cos(a) * d
         ys[i] = cy + sin(a) * d * 0.85f
     }
-    val gap = labelPx * 0.6f
+    val gap = labelPx * 1.1f
     repeat(220) {
         for (i in 0 until n) for (j in i + 1 until n) {
             val dx = xs[j] - xs[i]

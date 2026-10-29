@@ -228,7 +228,7 @@ fun ThumbIndex(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .graphicsLayer { translationX = (1f - out) * 6.dp.toPx() - out * 8.dp.toPx() }
+                        .graphicsLayer { translationX = -out * 8.dp.toPx() }
                         .drawBehind {
                             val color = if (isActive) look.accent else if (i % 2 == 0) paperA else paperB
                             // A tab: rounded on the side facing the page, square into the edge.
