@@ -111,9 +111,9 @@ class FootageTest {
         val pairs = listOf(
             Triple("Classic", "Dark", "Water"),
             Triple("Water", "Dark", "Ink"),
-            Triple("Ink", "Light", "Stone"),
-            Triple("Stone", "Light", "Paper"),
-            Triple("Paper", "Light", "Neon"),
+            Triple("Ink", "Dark", "Stone"),
+            Triple("Stone", "Dark", "Paper"),
+            Triple("Paper", "Dark", "Neon"),
             Triple("Neon", "Dark", "Cosmos"),
             Triple("Cosmos", "Dark", "Water"),
         )
