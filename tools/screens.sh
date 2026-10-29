@@ -8,7 +8,6 @@ adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard || true
 # A tidy status bar for store screenshots; keep system "not responding" dialogs out of the way.
 adb shell settings put global hide_error_dialogs 1 || true
-adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
 adb shell settings put global sysui_demo_allowed 1
 dm() { adb shell am broadcast -a com.android.systemui.demo -e command "$@" > /dev/null; }
 dm enter
