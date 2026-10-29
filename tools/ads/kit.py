@@ -139,19 +139,21 @@ def place_center(canvas, rgba, cx, cy):
 # ── text ──────────────────────────────────────────────────────────────
 def text_layer(txt, fnt, fill=(255, 255, 255), glow=None, glow_radius=18, tracking=0):
     """Renders text to a tight RGBA image (optionally with a colored glow)."""
+    # Height comes from the font's ascent/descent, not the glyphs, so words share a baseline.
     bbox = fnt.getbbox(txt)
+    ascent, descent = fnt.getmetrics()
     tw = bbox[2] - bbox[0] + tracking * max(0, len(txt) - 1)
-    th = bbox[3] - bbox[1]
+    th = ascent + descent
     pad = glow_radius * 3 if glow else 8
     img = Image.new("RGBA", (int(tw + 2 * pad), int(th + 2 * pad)), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     if tracking:
         x = pad - bbox[0]
         for ch in txt:
-            d.text((x, pad - bbox[1]), ch, font=fnt, fill=fill)
+            d.text((x, pad), ch, font=fnt, fill=fill)
             x += fnt.getlength(ch) + tracking
     else:
-        d.text((pad - bbox[0], pad - bbox[1]), txt, font=fnt, fill=fill)
+        d.text((pad - bbox[0], pad), txt, font=fnt, fill=fill)
     if glow:
         g = Image.new("RGBA", img.size, (0, 0, 0, 0))
         alpha = img.split()[3]
