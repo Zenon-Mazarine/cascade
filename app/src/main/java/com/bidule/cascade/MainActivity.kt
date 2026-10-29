@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        applyDebugExtras(intent)
         Sounds.init(this)
         val haptics = Haptics(this)
         setContent {
@@ -95,6 +96,26 @@ class MainActivity : ComponentActivity() {
                     CascadeApp(vm, homeTicks.intValue, resumeTicks.intValue)
                 }
             }
+        }
+    }
+
+    /**
+     * Lets automated screenshot runs pick a style/theme from the command line, e.g.
+     * adb shell am start -n com.bidule.cascade/.MainActivity --es cascade_style Ink --es cascade_theme Light
+     */
+    private fun applyDebugExtras(intent: Intent?) {
+        val extras = intent?.extras ?: return
+        val prefs = Prefs(this)
+        extras.getString("cascade_style")?.let { prefs.style = it }
+        extras.getString("cascade_theme")?.let { prefs.theme = it }
+        if (extras.getBoolean("cascade_demo", false)) {
+            val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val keys = packageManager.queryIntentActivities(launcher, 0)
+                .filter { it.activityInfo.packageName != packageName }
+                .take(9)
+                .map { android.content.ComponentName(it.activityInfo.packageName, it.activityInfo.name).flattenToString() }
+            prefs.favorites = keys
+            prefs.launchCounts = keys.mapIndexed { i, k -> k to (9 - i) * (9 - i) }.toMap()
         }
     }
 
