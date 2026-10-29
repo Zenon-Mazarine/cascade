@@ -22,9 +22,9 @@ os.makedirs(OUT, exist_ok=True)
 STYLES = [
     # key, title, subtitle, font, title color, bg top, bg bottom, glow, switch sfx
     ("water", "Water", "Ripples and droplets", "display-light", (127, 227, 242), (8, 52, 68), (2, 12, 18), None, "water_splash"),
-    ("ink", "Ink", "Brushstrokes on paper", "serif", (26, 23, 20), (246, 241, 230), (226, 217, 198), None, "ink_switch"),
-    ("stone", "Stone", "A zen garden", "serif", (46, 42, 37), (236, 228, 212), (205, 192, 168), None, "stone_switch"),
-    ("paper", "Paper", "Folded origami", "mono", (31, 35, 40), (250, 249, 245), (226, 222, 214), None, "paper_switch"),
+    ("ink", "Ink", "Brushstrokes on paper", "serif", (237, 230, 216), (36, 32, 28), (12, 11, 10), (210, 69, 58), "ink_switch"),
+    ("stone", "Stone", "A zen garden", "serif", (233, 226, 212), (52, 47, 40), (22, 20, 17), None, "stone_switch"),
+    ("paper", "Paper", "Folded origami", "mono", (241, 234, 223), (58, 52, 46), (24, 22, 20), (232, 135, 91), "paper_switch"),
     ("neon", "Neon", "Signs on a rainy night", "display-black", (255, 160, 214), (24, 8, 30), (6, 5, 12), (255, 62, 165), "neon_zap"),
     ("cosmos", "Cosmos", "A drifting constellation", "display-thin", (232, 236, 255), (20, 16, 52), (3, 4, 14), (159, 140, 255), "cosmos_switch"),
 ]
@@ -105,7 +105,8 @@ TITLES = {}
 def title_layers(st):
     key, name, sub, fnt, col, top, bot, glow, _ = st
     if key not in TITLES:
-        big = text_layer(name, font(fnt, 150), col, glow=glow, glow_radius=22)
+        tube = glow if key in ("neon", "cosmos") else None
+        big = text_layer(name, font(fnt, 150), col, glow=tube, glow_radius=22)
         light = sum(top) > 400
         small = text_layer(sub, font("text", 40), (40, 36, 32) if light else (230, 235, 245))
         TITLES[key] = (big, small)
