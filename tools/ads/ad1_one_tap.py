@@ -66,7 +66,24 @@ def load_clip(name, start, dur):
 CUTS = {}
 for key, *_ in STYLES:
     CUTS[key] = load_clip(f"switch-{PREV[key]}-{key}", 0.6 - SWITCH_AT, SEG + 0.3)
-MEET = load_clip("idle-water", 0.0, 2.0)
+MEET = load_clip("switch-classic-water", 0.0, 0.5)
+
+
+def last_frame(name):
+    c = load_clip(name, 2.6, 0.3)
+    return c.at(c.n - 1) if c else None
+
+
+def first_frame(name):
+    c = load_clip(name, 0.0, 0.2)
+    return c.at(0) if c else None
+
+
+# The fan of seven phones, all from the same capture (same clock, same theme).
+FAN = {"classic": first_frame("switch-classic-water")}
+for key, *_ in STYLES:
+    FAN[key] = last_frame(f"switch-{PREV[key]}-{key}")
+FAN = {k: (v if v is not None else STILLS[k]) for k, v in FAN.items()}
 
 ICON = Image.open(os.path.join(os.path.dirname(__file__), "..", "..", "store", "graphics", "icon-512.png")).convert("RGB")
 
@@ -160,9 +177,9 @@ def frame(t):
     if t < T_STYLES:
         lt = t - T_MEET
         canvas = Image.fromarray(bg((8, 52, 68), (2, 12, 18))).convert("RGBA")
-        p = spring(lt / 1.2, damping=0.55, freq=1.3)
+        p = ease_back(seg(lt, 0.0, 0.85), 1.1)
         cy = PHONE_CY + (1 - p) * 1300
-        scr = MEET.at(lt * FPS) if MEET else STILLS["water"]
+        scr = MEET.at(0) if MEET else STILLS["classic"]
         place_center(canvas, phone(scr, 1.0), W / 2, cy)
         word_reveal(canvas, ["Meet", "Cascade."], font("display", 92), W / 2, 230, lt, 0.35, stagger=0.12)
         put_text(canvas, text_layer("Seven styles. One tap.", font("text", 40), (200, 230, 240)), W / 2, 330,
@@ -215,7 +232,7 @@ def frame(t):
             ang = -off * 7 * p
             x = W / 2 + off * 150 * p
             y = 1200 + abs(off) ** 1.6 * 22 * p
-            ph = phone(STILLS[k], 0.42, angle=ang)
+            ph = phone(FAN[k], 0.42, angle=ang)
             place_center(canvas, ph, x, y)
         word_reveal(canvas, ["7", "styles."], font("display-black", 120), W / 2, 380, lt, 0.25, stagger=0.1)
         word_reveal(canvas, ["One", "tap."], font("display-black", 120), W / 2, 520, lt, 0.55, stagger=0.1, fill=(127, 227, 242))
