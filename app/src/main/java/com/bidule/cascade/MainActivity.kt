@@ -236,7 +236,7 @@ private fun CascadeApp(
         val target = DebugFlags.switchTo?.let { n -> CascadeStyle.entries.firstOrNull { it.name == n } }
         if (target != null) {
             DebugFlags.switchTo = null
-            delay(2500)
+            delay(6000)
             animateTo(Offset(DebugFlags.switchX, DebugFlags.switchY), target)
         }
     }
