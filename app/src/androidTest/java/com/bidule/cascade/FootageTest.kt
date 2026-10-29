@@ -97,17 +97,17 @@ class FootageTest {
         }
     }
 
-    private fun orbIntent(from: String, theme: String, to: String) = intent(from, theme) {
-        putExtra("cascade_switch_to", to)
-        // Where the style button sits in each layout (measured on a 1080-wide screen).
+    private fun switchAt(to: String, from: String) {
         val (x, y) = ORB.getValue(from)
-        putExtra("cascade_switch_x", (x * w / 1080f).toInt())
-        putExtra("cascade_switch_y", (y * w / 1080f).toInt())
+        val target = com.bidule.cascade.ui.CascadeStyle.valueOf(to)
+        rule.runOnUiThread {
+            DebugFlags.switchRequest.value = target to Offset(x * w / 1080f, y * w / 1080f)
+        }
     }
 
     @Test
     fun footage() {
-        // Style switches: the switch fires 6 s after launch; capture from 5.4 s to 8.4 s.
+        // Style switches: settle for 2.5 s, then the switch starts on frame 18 (0.6 s in).
         val pairs = listOf(
             Triple("Classic", "Dark", "Water"),
             Triple("Water", "Dark", "Ink"),
@@ -118,7 +118,9 @@ class FootageTest {
             Triple("Cosmos", "Dark", "Water"),
         )
         for ((from, theme, to) in pairs) {
-            clip("switch-${from.lowercase()}-${to.lowercase()}", orbIntent(from, theme, to), 5400, 90)
+            clip("switch-${from.lowercase()}-${to.lowercase()}", intent(from, theme), 2500, 90) { i ->
+                if (i == 18) switchAt(to, from)
+            }
         }
 
         // Idle loops: favorites cascading in, bubbles bobbing, signs flickering, stars drifting.

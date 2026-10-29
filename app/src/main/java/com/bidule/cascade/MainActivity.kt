@@ -131,9 +131,6 @@ class MainActivity : ComponentActivity() {
         DebugFlags.openStylePicker = extras.getBoolean("cascade_picker", false)
         DebugFlags.paywall = extras.getString("cascade_paywall")
         DebugFlags.clean = extras.getBoolean("cascade_clean", false)
-        DebugFlags.switchTo = extras.getString("cascade_switch_to")
-        DebugFlags.switchX = extras.getInt("cascade_switch_x", 0).toFloat()
-        DebugFlags.switchY = extras.getInt("cascade_switch_y", 0).toFloat()
         if (extras.containsKey("cascade_pro")) prefs.proOwned = extras.getBoolean("cascade_pro")
         prefs.onboarded = !extras.getBoolean("cascade_onboarding", false)
         if (extras.getBoolean("cascade_demo", false)) {
@@ -231,13 +228,12 @@ private fun CascadeApp(
         }
     }
 
-    // Footage capture only (screenshot builds).
-    LaunchedEffect(Unit) {
-        val target = DebugFlags.switchTo?.let { n -> CascadeStyle.entries.firstOrNull { it.name == n } }
-        if (target != null) {
-            DebugFlags.switchTo = null
-            delay(6000)
-            animateTo(Offset(DebugFlags.switchX, DebugFlags.switchY), target)
+    // Footage capture only: the test asks for a switch on an exact frame.
+    val switchRequest = DebugFlags.switchRequest.value
+    LaunchedEffect(switchRequest) {
+        if (switchRequest != null) {
+            DebugFlags.switchRequest.value = null
+            animateTo(switchRequest.second, switchRequest.first)
         }
     }
 
@@ -319,8 +315,6 @@ object DebugFlags {
     var paywall: String? = null
     /** Hide the "Preview mode" pill for store screenshots. */
     var clean = false
-    /** Footage capture: play a style switch from (x, y) a moment after launch. */
-    var switchTo: String? = null
-    var switchX = 0f
-    var switchY = 0f
+    /** Footage capture: set by the test to play a style switch from a point. */
+    val switchRequest = androidx.compose.runtime.mutableStateOf<Pair<CascadeStyle, Offset>?>(null)
 }
