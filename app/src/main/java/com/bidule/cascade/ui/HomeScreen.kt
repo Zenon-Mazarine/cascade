@@ -107,7 +107,7 @@ fun HomeScreen(
     homeTick: Int,
     resumeTick: Int,
     onOpenSettings: () -> Unit,
-    onSwitchStyle: (Offset) -> Unit,
+    onSwitchStyle: (Offset, CascadeStyle) -> Unit,
 ) {
     val context = LocalContext.current
     val feel = LocalFeel.current
@@ -139,6 +139,13 @@ fun HomeScreen(
     var allAppsOpen by remember { mutableStateOf(false) }
     var indexGroup by remember { mutableStateOf<Int?>(null) }
     var shortcutCardFor by remember { mutableStateOf<AppEntry?>(null) }
+    var stylePickerOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (com.bidule.cascade.DebugFlags.openStylePicker) {
+            com.bidule.cascade.DebugFlags.openStylePicker = false
+            stylePickerOpen = true
+        }
+    }
 
     // Drag-to-reorder state for the favorites list.
     val listState = rememberLazyListState()
@@ -158,6 +165,7 @@ fun HomeScreen(
         allAppsOpen = false
         indexGroup = null
         shortcutCardFor = null
+        stylePickerOpen = false
     }
 
     fun dragCallbacks(key: String) = DragCallbacks(
@@ -224,6 +232,7 @@ fun HomeScreen(
             onToggleShortcuts = { shortcutsFor = if (shortcutsFor == shortcutId) null else shortcutId },
             drag = if (big) dragCallbacks(app.key) else null,
             word = big && look.kind == CascadeStyle.Ink,
+            neon = if (big && look.kind == CascadeStyle.Neon) favorites.indexOf(app) else -1,
             isBookmarked = app.key in bookmarkKeys,
             onToggleBookmark = vm::toggleBookmark,
         )
@@ -234,12 +243,22 @@ fun HomeScreen(
     val pullDown = remember {
         object : NestedScrollConnection {
             var pulled = 0f
+            var lifted = 0f
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (source == NestedScrollSource.UserInput && available.y > 0f) {
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                if (available.y > 0f) {
                     pulled += available.y
                     if (pulled > pullThreshold) {
                         pulled = Float.NEGATIVE_INFINITY // once per gesture
                         HomeUtils.expandNotifications(context)
+                    }
+                } else if (available.y < 0f) {
+                    // Pushing past the bottom of the list: bring up every app.
+                    lifted -= available.y
+                    if (lifted > pullThreshold) {
+                        lifted = Float.NEGATIVE_INFINITY
+                        feel.open()
+                        allAppsOpen = true
                     }
                 }
                 return Offset.Zero
@@ -247,6 +266,7 @@ fun HomeScreen(
 
             override suspend fun onPreFling(available: Velocity): Velocity {
                 pulled = 0f
+                lifted = 0f
                 return Velocity.Zero
             }
         }
@@ -254,7 +274,7 @@ fun HomeScreen(
 
     val panelOpen = panelLetter != null
     val anyOverlay = panelOpen || searchOpen || folderOpen || pickerOpen ||
-        allAppsOpen || indexGroup != null || shortcutCardFor != null
+        allAppsOpen || indexGroup != null || shortcutCardFor != null || stylePickerOpen
     val listAlpha by animateFloatAsState(if (anyOverlay) 0.25f else 1f, Motion.soft, label = "dim")
     val listBlur by animateDpAsState(
         if (anyOverlay) 14.dp else 0.dp,
@@ -263,6 +283,12 @@ fun HomeScreen(
     )
 
     val touchMarks = remember(scope) { TouchMarks(scope) }
+
+    val openStylePicker: (Offset) -> Unit = {
+        closeAll()
+        feel.open()
+        stylePickerOpen = true
+    }
 
     val toggleFolder: () -> Unit = {
         panelLetter = null
@@ -322,7 +348,7 @@ fun HomeScreen(
                     }
                 }
                 item(key = "clock") {
-                    CascadeIn(0, resumeTick) { ClockHeader(resumeTick, onLongPress = onOpenSettings, onSwitchStyle = onSwitchStyle) }
+                    CascadeIn(0, resumeTick) { ClockHeader(resumeTick, onLongPress = onOpenSettings, onSwitchStyle = openStylePicker) }
                 }
                 item(key = "gap") { Spacer(Modifier.height(22.dp)) }
                 if (favorites.isEmpty() && apps.isNotEmpty()) {
@@ -338,8 +364,8 @@ fun HomeScreen(
             }
             }
 
-            // ── Water: the Pool ──
-            CascadeStyle.Water -> PoolHome(
+            // ── Water: the Pool. Stone: the garden. Cosmos: the constellation. ──
+            CascadeStyle.Water, CascadeStyle.Stone, CascadeStyle.Cosmos -> PoolHome(
                 favorites = favorites,
                 appsByPackage = appsByPackage,
                 notifications = notifications,
@@ -353,7 +379,7 @@ fun HomeScreen(
                         if (!isDefaultHome) Box(Modifier.padding(horizontal = 20.dp)) { SetupPill(onOpenSettings) }
                         Box(Modifier.padding(horizontal = 12.dp)) {
                             CascadeIn(0, resumeTick) {
-                                ClockHeader(resumeTick, onLongPress = onOpenSettings, onSwitchStyle = onSwitchStyle)
+                                ClockHeader(resumeTick, onLongPress = onOpenSettings, onSwitchStyle = openStylePicker)
                             }
                         }
                     }
@@ -370,13 +396,75 @@ fun HomeScreen(
                 modifier = bodyModifier,
             )
 
+            // ── Paper: folded cards ──
+            CascadeStyle.Paper -> PaperHome(
+                favorites = favorites,
+                notifications = notifications,
+                favoriteKeys = favoriteKeys,
+                bookmarkKeys = bookmarkKeys,
+                resumeTick = resumeTick,
+                pull = pullDown,
+                header = {
+                    Column {
+                        TopBar(onSearch = { searchOpen = true }, onBookmarks = toggleFolder, onSettings = onOpenSettings)
+                        if (!isDefaultHome) Box(Modifier.padding(horizontal = 20.dp)) { SetupPill(onOpenSettings) }
+                        Box(Modifier.padding(horizontal = 12.dp)) {
+                            CascadeIn(0, resumeTick) {
+                                ClockHeader(resumeTick, onLongPress = onOpenSettings, onSwitchStyle = openStylePicker)
+                            }
+                        }
+                    }
+                },
+                onLaunch = launch,
+                onToggleFavorite = vm::toggleFavorite,
+                onToggleBookmark = vm::toggleBookmark,
+                onShortcuts = { shortcutCardFor = it },
+                modifier = bodyModifier,
+            )
+
+            // ── Neon: a street of glowing signs ──
+            CascadeStyle.Neon -> Column(bodyModifier) {
+                TopBar(
+                    onSearch = { searchOpen = true },
+                    onBookmarks = toggleFolder,
+                    onSettings = onOpenSettings,
+                    trailing = { StyleOrb(onSwitch = openStylePicker, size = 40.dp) },
+                )
+                if (!isDefaultHome) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { SetupPill(onOpenSettings) }
+                }
+                NeonHeader(resumeTick, onLongPress = onOpenSettings)
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .nestedScroll(pullDown),
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom),
+                ) {
+                    if (favorites.isEmpty() && apps.isNotEmpty()) {
+                        item(key = "hint") {
+                            Text(
+                                "Pull up for all apps, then long-press one and choose “Pin to home” to light up a sign.",
+                                style = look.style(15.sp, color = look.subtext),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            )
+                        }
+                    }
+                    itemsIndexed(favorites, key = { _, app -> app.key }) { index, app -> favoriteItem(index, app) }
+                }
+            }
+
             // ── Ink: the Scroll ──
             CascadeStyle.Ink -> Column(bodyModifier) {
                 TopBar(
                     onSearch = { searchOpen = true },
                     onBookmarks = toggleFolder,
                     onSettings = onOpenSettings,
-                    trailing = { StyleOrb(onSwitch = onSwitchStyle, size = 40.dp) },
+                    trailing = { StyleOrb(onSwitch = openStylePicker, size = 40.dp) },
                 )
                 if (!isDefaultHome) {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { SetupPill(onOpenSettings) }
@@ -535,7 +623,26 @@ fun HomeScreen(
             AllAppsSheet(apps = apps, row = { rowFor(it, false) }, onClose = { allAppsOpen = false })
         }
 
-        // Shortcuts for a bubble (Water) as a floating card.
+        // The style picker, from the style button.
+        AnimatedVisibility(
+            visible = stylePickerOpen,
+            enter = fadeIn(tween(180)) + slideInVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) { it / 3 },
+            exit = fadeOut(tween(160)) + slideOutVertically(tween(200)) { it / 3 },
+        ) {
+            StylePickerSheet(
+                onPick = { origin, st ->
+                    stylePickerOpen = false
+                    if (st != look.kind) onSwitchStyle(origin, st)
+                },
+                onOriginal = {
+                    stylePickerOpen = false
+                    HomeUtils.restoreOriginal(context)
+                },
+                onClose = { stylePickerOpen = false },
+            )
+        }
+
+        // Shortcuts for a bubble or card as a floating card.
         AnimatedVisibility(
             visible = shortcutCardFor != null,
             enter = fadeIn(Motion.soft) + scaleIn(Motion.bouncy, initialScale = 0.85f),

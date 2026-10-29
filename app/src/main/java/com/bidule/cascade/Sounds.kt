@@ -15,6 +15,10 @@ object Sounds {
         R.raw.water_drop, R.raw.water_bubble, R.raw.water_soft, R.raw.water_splash,
         R.raw.ink_pluck, R.raw.ink_tap, R.raw.ink_brush, R.raw.ink_stamp, R.raw.ink_switch,
         R.raw.classic_tick,
+        R.raw.stone_click, R.raw.stone_tap, R.raw.stone_rake, R.raw.stone_switch,
+        R.raw.paper_tap, R.raw.paper_fold, R.raw.paper_flick, R.raw.paper_switch,
+        R.raw.neon_blip, R.raw.neon_buzz, R.raw.neon_zap,
+        R.raw.cosmos_chime, R.raw.cosmos_sparkle, R.raw.cosmos_switch,
     )
 
     private var pool: SoundPool? = null
@@ -30,7 +34,7 @@ object Sounds {
             .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
-        pool = SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build().also { p ->
+        pool = SoundPool.Builder().setMaxStreams(8).setAudioAttributes(attrs).build().also { p ->
             p.setOnLoadCompleteListener { _, soundId, status -> if (status == 0) loaded.add(soundId) }
             ALL.forEach { res -> ids[res] = p.load(app, res, 1) }
         }

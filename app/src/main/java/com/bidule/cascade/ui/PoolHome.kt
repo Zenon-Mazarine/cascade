@@ -155,12 +155,23 @@ fun PoolHome(
             val radii = remember(favorites, launchCounts, notifications.keys, wPx, hPx) {
                 bubbleRadii(favorites, launchCounts, notifications.keys, wPx, hPx, density.density)
             }
-            val centers = remember(radii, wPx, hPx) {
-                poolLayout(radii, wPx, hPx, labelPx = 22f * density.density)
+            val centers = remember(radii, wPx, hPx, look.kind) {
+                poolLayout(
+                    radii, wPx, hPx,
+                    labelPx = 22f * density.density,
+                    spread = if (look.kind == CascadeStyle.Cosmos) 1.7f else 1.1f,
+                    centerY = if (look.kind == CascadeStyle.Cosmos) 0.5f else 0.56f,
+                )
             }
+            // What lies under the objects: rake rings around stones, lines between stars.
+            FieldUnderlay(look, radii, centers)
             if (favorites.isEmpty()) {
                 Text(
-                    "Pull the water up, long-press any app and choose “Pin to home” to set it afloat here.",
+                    when (look.kind) {
+                        CascadeStyle.Stone -> "Pull up for all apps, then long-press one and choose “Pin to home” to place a stone here."
+                        CascadeStyle.Cosmos -> "Pull up for all apps, then long-press one and choose “Pin to home” to add a star here."
+                        else -> "Pull the water up, long-press any app and choose “Pin to home” to set it afloat here."
+                    },
                     style = look.style(15.sp, color = look.subtext),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -194,7 +205,11 @@ fun PoolHome(
         }
 
         Tide(notifications, appsByPackage)
-        Waterline(pullPx = pull.value)
+        when (look.kind) {
+            CascadeStyle.Stone -> GardenEdge(pullPx = pull.value)
+            CascadeStyle.Cosmos -> Horizon(pullPx = pull.value)
+            else -> Waterline(pullPx = pull.value)
+        }
     }
 }
 
@@ -221,11 +236,18 @@ private fun bubbleRadii(
  * Places bubbles on a sunflower spiral around a point low in the pool (where the thumb is),
  * then lets them push each other apart until nothing overlaps.
  */
-private fun poolLayout(radii: List<Float>, w: Float, h: Float, labelPx: Float): List<Offset> {
+private fun poolLayout(
+    radii: List<Float>,
+    w: Float,
+    h: Float,
+    labelPx: Float,
+    spread: Float = 1.1f,
+    centerY: Float = 0.56f,
+): List<Offset> {
     val n = radii.size
     if (n == 0 || w <= 0f || h <= 0f) return emptyList()
     val cx = w * 0.5f
-    val cy = h * 0.56f
+    val cy = h * centerY
     val avg = radii.average().toFloat()
     val xs = FloatArray(n)
     val ys = FloatArray(n)
@@ -235,7 +257,7 @@ private fun poolLayout(radii: List<Float>, w: Float, h: Float, labelPx: Float): 
         xs[i] = cx + cos(a) * d
         ys[i] = cy + sin(a) * d * 0.85f
     }
-    val gap = labelPx * 1.1f
+    val gap = labelPx * spread
     repeat(220) {
         for (i in 0 until n) for (j in i + 1 until n) {
             val dx = xs[j] - xs[i]
@@ -279,7 +301,12 @@ private fun Bubble(
     val feel = LocalFeel.current
     var pressed by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
-    val squish by animateFloatAsState(if (pressed || menuOpen) 0.86f else 1f, Motion.liquid, label = "squish")
+    val kind = look.kind
+    val squish by animateFloatAsState(
+        if (pressed || menuOpen) (if (kind == CascadeStyle.Stone) 0.93f else 0.86f) else 1f,
+        if (kind == CascadeStyle.Stone) Motion.brush else Motion.liquid,
+        label = "squish",
+    )
     val t by rememberInfiniteTransition(label = "bob").animateFloat(
         initialValue = 0f,
         targetValue = 2f * PI.toFloat(),
@@ -301,13 +328,37 @@ private fun Bubble(
             Modifier
                 .size(radius * 2)
                 .graphicsLayer {
-                    translationY = sin(t + phase) * 3.dp.toPx()
-                    translationX = cos(t * 0.5f + phase) * 1.5.dp.toPx()
-                    // A droplet is never perfectly round: it breathes a little.
-                    scaleX = squish * (1f + 0.025f * sin(2 * t + phase))
-                    scaleY = squish * (1f - 0.025f * sin(2 * t + phase))
+                    when (kind) {
+                        // Stones don't move.
+                        CascadeStyle.Stone -> {
+                            scaleX = squish
+                            scaleY = squish
+                        }
+                        // Stars drift slowly.
+                        CascadeStyle.Cosmos -> {
+                            translationY = sin(t * 0.5f + phase) * 5.dp.toPx()
+                            translationX = cos(t * 0.35f + phase) * 4.dp.toPx()
+                            scaleX = squish
+                            scaleY = squish
+                        }
+                        else -> {
+                            translationY = sin(t + phase) * 3.dp.toPx()
+                            translationX = cos(t * 0.5f + phase) * 1.5.dp.toPx()
+                            // A droplet is never perfectly round: it breathes a little.
+                            scaleX = squish * (1f + 0.025f * sin(2 * t + phase))
+                            scaleY = squish * (1f - 0.025f * sin(2 * t + phase))
+                        }
+                    }
                 }
                 .drawBehind {
+                    if (kind == CascadeStyle.Stone) {
+                        drawStone(look, phase, notifCount > 0, glow)
+                        return@drawBehind
+                    }
+                    if (kind == CascadeStyle.Cosmos) {
+                        drawStar(look, t, phase, notifCount > 0, glow)
+                        return@drawBehind
+                    }
                     val r = size.minDimension / 2f
                     val c = Offset(size.width / 2f, size.height / 2f)
                     if (notifCount > 0) {
@@ -360,7 +411,7 @@ private fun Bubble(
                 app.icon,
                 contentDescription = app.label,
                 colorFilter = look.iconFilter,
-                modifier = Modifier.size(radius * 1.15f),
+                modifier = Modifier.size(radius * if (kind == CascadeStyle.Water) 1.15f else 0.95f),
             )
             if (notifCount > 0) {
                 Box(
@@ -618,3 +669,156 @@ fun ShortcutCard(app: AppEntry, onDone: () -> Unit, modifier: Modifier = Modifie
 
 @Suppress("unused")
 private fun clamp01(v: Float) = min(1f, kotlin.math.max(0f, v))
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stone garden and constellation pieces
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun FieldUnderlay(look: Look, radii: List<Float>, centers: List<Offset>) {
+    if (look.kind != CascadeStyle.Stone && look.kind != CascadeStyle.Cosmos) return
+    val t by rememberInfiniteTransition(label = "lines").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Reverse),
+        label = "linesT",
+    )
+    Canvas(Modifier.fillMaxSize()) {
+        if (look.kind == CascadeStyle.Stone) {
+            // Concentric rake rings around each stone (the stone sits a little above its label).
+            centers.forEachIndexed { i, c ->
+                val r = radii.getOrElse(i) { 30f }
+                for (k in 1..4) {
+                    drawCircle(
+                        look.effect.copy(alpha = (if (look.isLight) 0.32f else 0.22f) * (1f - k * 0.15f)),
+                        radius = r + k * 9.dp.toPx(),
+                        center = c,
+                        style = Stroke(1.dp.toPx()),
+                    )
+                }
+            }
+        } else {
+            // Constellation: join the stars with the shortest set of lines that connects them all.
+            val n = centers.size
+            if (n < 2) return@Canvas
+            val inTree = BooleanArray(n).also { it[0] = true }
+            repeat(n - 1) {
+                var best = Float.MAX_VALUE
+                var a = -1
+                var b = -1
+                for (i in 0 until n) if (inTree[i]) for (j in 0 until n) if (!inTree[j]) {
+                    val d = (centers[i] - centers[j]).getDistance()
+                    if (d < best) { best = d; a = i; b = j }
+                }
+                if (b < 0) return@repeat
+                inTree[b] = true
+                val pa = centers[a]
+                val pb = centers[b]
+                val dir = (pb - pa) / best
+                val ra = radii[a] + 4.dp.toPx()
+                val rb = radii[b] + 4.dp.toPx()
+                if (best > ra + rb) {
+                    drawLine(
+                        look.effect.copy(alpha = 0.22f + 0.12f * t),
+                        pa + dir * ra,
+                        pb - dir * rb,
+                        1.dp.toPx(),
+                        StrokeCap.Round,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStone(look: Look, seed: Float, hasNotif: Boolean, glow: Float) {
+    val r = size.minDimension / 2f
+    val c = Offset(size.width / 2f, size.height / 2f)
+    val dark = if (look.isLight) Color(0xFF4A4640) else Color(0xFF2E2B27)
+    val lightTone = if (look.isLight) Color(0xFF8E8880) else Color(0xFF6A655D)
+    val shape = blobPath(c, r * 0.98f, seed = seed, roughness = 0.45f)
+    // Soft shadow on the sand.
+    drawPath(blobPath(Offset(c.x + r * 0.08f, c.y + r * 0.14f), r, seed = seed, roughness = 0.45f), Color.Black.copy(alpha = 0.18f))
+    drawPath(shape, Brush.radialGradient(listOf(lightTone, dark), Offset(c.x - r * 0.3f, c.y - r * 0.35f), r * 1.5f))
+    drawCircle(Color.White.copy(alpha = 0.18f), r * 0.18f, Offset(c.x - r * 0.4f, c.y - r * 0.45f))
+    if (hasNotif) {
+        // A little moss grows on stones with something new.
+        drawCircle(look.accent.copy(alpha = 0.6f + 0.3f * glow), r * 0.16f, Offset(c.x + r * 0.62f, c.y - r * 0.55f))
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStar(look: Look, t: Float, phase: Float, hasNotif: Boolean, glow: Float) {
+    val r = size.minDimension / 2f
+    val c = Offset(size.width / 2f, size.height / 2f)
+    val twinkle = 0.5f + 0.5f * sin(t * 1.6f + phase)
+    val halo = r * (1.25f + 0.15f * twinkle + if (hasNotif) 0.35f * glow else 0f)
+    drawCircle(
+        Brush.radialGradient(listOf(look.effect.copy(alpha = 0.45f), Color.Transparent), c, halo),
+        halo,
+        c,
+    )
+    drawCircle(Color(0xFF0B0E22).copy(alpha = if (look.isLight) 0.12f else 0.75f), r * 0.82f, c)
+    drawCircle(look.effect.copy(alpha = 0.7f), r * 0.82f, c, style = Stroke(1.dp.toPx()))
+    drawSparkle(Offset(c.x + r * 0.72f, c.y - r * 0.72f), r * (0.22f + 0.1f * twinkle), Color.White.copy(alpha = 0.9f))
+}
+
+/** The wooden edge of the garden. */
+@Composable
+private fun GardenEdge(pullPx: Float) {
+    val look = LocalLook.current
+    Box(Modifier.fillMaxWidth().height(64.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val lift = (-pullPx).coerceIn(0f, 120.dp.toPx()) * 0.3f
+            val top = size.height * 0.35f - lift
+            val wood = if (look.isLight) Color(0xFF7A5F43) else Color(0xFF4A3A2A)
+            drawRect(wood, Offset(0f, top), Size(size.width, size.height - top))
+            for (k in 0 until 5) {
+                val y = top + 5.dp.toPx() + k * 7.dp.toPx()
+                val path = Path().apply {
+                    moveTo(0f, y)
+                    var x = 0f
+                    while (x <= size.width) {
+                        lineTo(x, y + sin(x * 0.01f + k * 1.3f) * 1.5.dp.toPx())
+                        x += 14f
+                    }
+                }
+                drawPath(path, Color.Black.copy(alpha = 0.18f), style = Stroke(1.dp.toPx()))
+            }
+            drawLine(Color.White.copy(alpha = 0.2f), Offset(0f, top), Offset(size.width, top), 1.dp.toPx())
+        }
+        Text(
+            "︿  pull up for all apps",
+            style = look.style(12.sp, color = Color(0xFFF3EDE1).copy(alpha = 0.85f)).copy(shadow = null),
+            modifier = Modifier.padding(top = 26.dp),
+        )
+    }
+}
+
+/** A planet's glowing limb at the bottom of the sky. */
+@Composable
+private fun Horizon(pullPx: Float) {
+    val look = LocalLook.current
+    Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val rise = (-pullPx).coerceIn(0f, 120.dp.toPx()) * 0.4f
+            val r = size.width * 1.4f
+            val c = Offset(size.width / 2f, size.height * 0.45f - rise + r)
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(Color.Transparent, look.accent.copy(alpha = 0.35f), Color.Transparent),
+                    c, r + 30.dp.toPx(),
+                ),
+                r + 30.dp.toPx(),
+                c,
+            )
+            drawCircle(if (look.isLight) Color(0xFFDDE1F2) else Color(0xFF070918), r, c)
+            drawCircle(look.effect.copy(alpha = 0.7f), r, c, style = Stroke(1.5.dp.toPx()))
+        }
+        Text(
+            "︿  pull up for all apps",
+            style = look.style(12.sp, color = look.text.copy(alpha = 0.75f)),
+            modifier = Modifier.padding(top = 30.dp),
+        )
+    }
+}

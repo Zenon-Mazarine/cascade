@@ -109,6 +109,8 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
         roleTick++
     }
     fun becomeHome() {
+        // In case the "Original" button switched Cascade's home entry off earlier.
+        HomeUtils.setHomeEnabled(context, true)
         if (Build.VERSION.SDK_INT >= 29) {
             val rm = context.getSystemService(RoleManager::class.java)
             if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME) && !rm.isRoleHeld(RoleManager.ROLE_HOME)) {
@@ -234,23 +236,36 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
             // ── The way back ─────────────────────────────────────────────
             item {
                 Section(
-                    title = "Go back to your old home screen",
+                    title = "Return to your original home screen",
                     highlight = true,
                 ) {
                     Text(
-                        "Cascade never touches your previous launcher. Its icons, folders and widgets " +
-                            "are still there exactly as you left them, and switching back brings them all back instantly.",
+                        "Cascade never changes your phone's own home screen. Its icons, folders and widgets " +
+                            "are kept exactly as you left them. One tap puts it back.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(Modifier.height(12.dp))
-                    if (!isDefaultHome) {
+                    if (isDefaultHome) {
+                        Button(
+                            onClick = { HomeUtils.restoreOriginal(context) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Return to original home screen") }
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            "Cascade isn't your home screen right now, so your old one is already active.",
+                            "To come back to Cascade later, just open it from your app drawer.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                        )
+                    } else {
+                        Text(
+                            "Cascade isn't your home screen right now, so your original one is active.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                    } else if (otherHomes.isEmpty()) {
-                        Text("No other home screen app was found on this phone.")
+                    }
+                    if (otherHomes.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text("Other home screens on this phone", fontWeight = FontWeight.Medium, fontSize = 13.sp)
                     }
                     otherHomes.forEach { home ->
                         Row(
@@ -262,21 +277,10 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                             Column(Modifier.weight(1f)) {
                                 Text(home.label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
                                 if (home.packageName == previousHome) {
-                                    Text("Your previous home screen", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                                    Text("Your original home screen", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
-                            if (isDefaultHome) {
-                                Button(onClick = {
-                                    HomeUtils.openHomeSettings(context)
-                                    Toast.makeText(
-                                        context,
-                                        "Pick “${home.label}” to switch back",
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                }) { Text("Switch back") }
-                            } else {
-                                TextButton(onClick = { HomeUtils.peekHome(context, home.packageName) }) { Text("Open") }
-                            }
+                            TextButton(onClick = { HomeUtils.peekHome(context, home.packageName) }) { Text("Peek") }
                         }
                     }
                     Spacer(Modifier.height(8.dp))

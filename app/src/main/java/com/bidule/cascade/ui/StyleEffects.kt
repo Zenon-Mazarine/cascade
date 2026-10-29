@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
@@ -139,6 +140,10 @@ fun StyleBackdrop(modifier: Modifier = Modifier) {
         CascadeStyle.Classic -> Unit
         CascadeStyle.Water -> WaterBackdrop(look, modifier)
         CascadeStyle.Ink -> InkBackdrop(look, modifier)
+        CascadeStyle.Stone -> StoneBackdrop(look, modifier)
+        CascadeStyle.Paper -> PaperBackdrop(look, modifier)
+        CascadeStyle.Neon -> NeonBackdrop(look, modifier)
+        CascadeStyle.Cosmos -> CosmosBackdrop(look, modifier)
     }
 }
 
@@ -320,7 +325,7 @@ fun TouchMarksLayer(marks: TouchMarks, modifier: Modifier = Modifier) {
                         look.effect.copy(alpha = 0.16f * (1f - p).pow(1.5f)),
                     )
                 }
-                CascadeStyle.Classic -> Unit
+                else -> drawTouchMark(look, m.center, p, m.seed)
             }
         }
     }
@@ -376,9 +381,7 @@ fun StyleSwitchLayer(switch: StyleSwitch?, modifier: Modifier = Modifier) {
                     )
                 }
             }
-            CascadeStyle.Classic -> {
-                drawCircle(Color(0xFF111317).copy(alpha = 0.92f * fade), radius = grow * maxR, center = o)
-            }
+            else -> drawSwitch(switch.target, o, p, grow, fade, maxR)
         }
     }
 }
@@ -422,7 +425,7 @@ fun StyleOrb(onSwitch: (Offset) -> Unit, modifier: Modifier = Modifier, size: Dp
     }
 }
 
-private fun DrawScope.drawOrb(look: Look) {
+fun DrawScope.drawOrb(look: Look) {
     val c = Offset(size.width / 2f, size.height / 2f)
     when (look.kind) {
         CascadeStyle.Water, CascadeStyle.Classic -> {
@@ -459,6 +462,7 @@ private fun DrawScope.drawOrb(look: Look) {
             val s = size.minDimension * 0.2f
             drawRect(look.accent, topLeft = Offset(c.x + r * 0.55f, c.y + r * 0.55f), size = Size(s, s))
         }
+        else -> drawStyleIcon(look)
     }
 }
 
@@ -500,6 +504,29 @@ fun LetterBadge(letter: Char, modifier: Modifier = Modifier) {
                 style = look.style(30.sp, FontWeight.Bold, look.accent).copy(shadow = null),
                 modifier = modifier,
             )
+        }
+        else -> {
+            val glow = if (look.kind == CascadeStyle.Neon) {
+                androidx.compose.ui.graphics.Shadow(look.accent, Offset.Zero, 18f)
+            } else {
+                null
+            }
+            Box(modifier.size(46.dp), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.size(46.dp)) {
+                    when (look.kind) {
+                        CascadeStyle.Paper -> rotate(45f) {
+                            val s = size.minDimension * 0.66f
+                            drawRect(look.accent.copy(alpha = 0.16f), Offset((size.width - s) / 2, (size.height - s) / 2), Size(s, s))
+                        }
+                        CascadeStyle.Stone -> drawPath(
+                            blobPath(center, size.minDimension * 0.44f, seed = letter.code.toFloat(), roughness = 0.5f),
+                            look.effect.copy(alpha = 0.25f),
+                        )
+                        else -> drawCircle(look.accent.copy(alpha = 0.55f), style = Stroke(1.5.dp.toPx()))
+                    }
+                }
+                Text(letter.toString(), style = look.display(26.sp, color = look.accent).copy(shadow = glow))
+            }
         }
     }
 }

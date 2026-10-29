@@ -33,7 +33,18 @@ enum class CascadeStyle(val label: String, val blurb: String) {
     Classic("Classic", "Clean and quiet"),
     Water("Water", "Ripples, droplets and liquid motion"),
     Ink("Ink", "Brushstrokes on paper, with a red seal"),
+    Stone("Stone", "A zen garden: pebbles on raked sand"),
+    Paper("Paper", "Folded origami cards that crease and unfold"),
+    Neon("Neon", "Glowing signs on a rainy night street"),
+    Cosmos("Cosmos", "Your apps as a drifting constellation"),
 }
+
+/** Which home layout a style uses. */
+val CascadeStyle.isField: Boolean
+    get() = this == CascadeStyle.Water || this == CascadeStyle.Stone || this == CascadeStyle.Cosmos
+
+/** Neon sign colors, cycled down the street. */
+val NeonColors = listOf(Color(0xFFFF3EA5), Color(0xFF00E5FF), Color(0xFFFFB000), Color(0xFF39FF88), Color(0xFFB26BFF))
 
 val RailWidth = 40.dp
 
@@ -109,6 +120,26 @@ private fun palette(kind: CascadeStyle, mode: ThemeMode): Palette = when (kind) 
         ThemeMode.Dark -> Palette(Color(0xFF0F0E0D), Color(0xFFEDE6D8), Color(0xFF948B7E), Color(0xFFD2453A), Color(0xFF1A1816), Color(0xFFEDE6D8))
         ThemeMode.Light -> Palette(Color(0xFFF3EEE3), Color(0xFF1A1714), Color(0xFF6E665C), Color(0xFFB8322A), Color(0xFFFBF7EE), Color(0xFF1A1714))
     }
+    CascadeStyle.Stone -> when (mode) {
+        ThemeMode.Wallpaper -> Palette(Color.Transparent, Color.White, Color.White.copy(alpha = 0.8f), Color(0xFFA8C686), Color(0xF0242019), Color(0xFFE8DCC4))
+        ThemeMode.Dark -> Palette(Color(0xFF1C1A17), Color(0xFFE9E2D4), Color(0xFF9C9384), Color(0xFF8FB06A), Color(0xFF262320), Color(0xFFCFC2A8))
+        ThemeMode.Light -> Palette(Color(0xFFE9E1D1), Color(0xFF2E2A25), Color(0xFF7A7266), Color(0xFF5E7F3A), Color(0xFFF3EDE1), Color(0xFF8C7B62))
+    }
+    CascadeStyle.Paper -> when (mode) {
+        ThemeMode.Wallpaper -> Palette(Color.Transparent, Color.White, Color.White.copy(alpha = 0.8f), Color(0xFFFFB37A), Color(0xF02B2622), Color.White)
+        ThemeMode.Dark -> Palette(Color(0xFF22201D), Color(0xFFF1EADF), Color(0xFFA49A8B), Color(0xFFE8875B), Color(0xFF2E2B27), Color(0xFFF1EADF))
+        ThemeMode.Light -> Palette(Color(0xFFF7F6F2), Color(0xFF1F2328), Color(0xFF6A7079), Color(0xFFE4572E), Color.White, Color(0xFF1F2328))
+    }
+    CascadeStyle.Neon -> when (mode) {
+        ThemeMode.Wallpaper -> Palette(Color.Transparent, Color.White, Color.White.copy(alpha = 0.8f), Color(0xFFFF3EA5), Color(0xF00B0716), Color(0xFF00E5FF))
+        ThemeMode.Dark -> Palette(Color(0xFF07060D), Color(0xFFF5F0FF), Color(0xFF8E86A8), Color(0xFFFF3EA5), Color(0xFF120F1F), Color(0xFF00E5FF))
+        ThemeMode.Light -> Palette(Color(0xFFE9E6F0), Color(0xFF1A1430), Color(0xFF6B6385), Color(0xFFE0007A), Color(0xFFF7F5FB), Color(0xFF0098B3))
+    }
+    CascadeStyle.Cosmos -> when (mode) {
+        ThemeMode.Wallpaper -> Palette(Color.Transparent, Color.White, Color.White.copy(alpha = 0.8f), Color(0xFFB9A6FF), Color(0xF00A0B1E), Color(0xFFDCE6FF))
+        ThemeMode.Dark -> Palette(Color(0xFF04050F), Color(0xFFE6EAFF), Color(0xFF8790B8), Color(0xFF9F8CFF), Color(0xFF0D1026), Color(0xFFCFE0FF))
+        ThemeMode.Light -> Palette(Color(0xFFE9ECF7), Color(0xFF141833), Color(0xFF626A8C), Color(0xFF5B4BD6), Color(0xFFF8F9FE), Color(0xFF5B4BD6))
+    }
 }
 
 fun lookFor(mode: ThemeMode, mono: Boolean, kind: CascadeStyle): Look {
@@ -118,6 +149,10 @@ fun lookFor(mode: ThemeMode, mono: Boolean, kind: CascadeStyle): Look {
         CascadeStyle.Classic -> Fonts(FontFamily.Default, FontWeight.Normal, FontFamily.Default, FontWeight.Light)
         CascadeStyle.Water -> Fonts(FontFamily.SansSerif, FontWeight.Normal, FontFamily.SansSerif, FontWeight.Thin)
         CascadeStyle.Ink -> Fonts(FontFamily.Serif, FontWeight.Normal, FontFamily.Serif, FontWeight.Light)
+        CascadeStyle.Stone -> Fonts(FontFamily.Serif, FontWeight.Normal, FontFamily.Serif, FontWeight.ExtraLight)
+        CascadeStyle.Paper -> Fonts(FontFamily.Monospace, FontWeight.Normal, FontFamily.Monospace, FontWeight.Normal)
+        CascadeStyle.Neon -> Fonts(FontFamily.SansSerif, FontWeight.Medium, FontFamily.Cursive, FontWeight.Bold)
+        CascadeStyle.Cosmos -> Fonts(FontFamily.SansSerif, FontWeight.Light, FontFamily.SansSerif, FontWeight.Thin)
     }
     val base = Look(
         mode = mode,

@@ -152,3 +152,105 @@ write("ink_switch", ink_switch)
 
 # ── Classic ───────────────────────────────────────────────────────────
 write("classic_tick", tone(1800, 0.004, 0.03), peak=0.5)
+
+# ── Stone (zen garden) ────────────────────────────────────────────────
+def woodblock(f, decay=0.03, dur=0.12):
+    return tone(f, decay, dur, partials=((1, 1.0), (2.7, 0.35), (4.1, 0.12)))
+
+
+click = woodblock(900, 0.025)
+mix(click, tone(320, 0.05, 0.15), gain=0.6)
+mix(click, envelope(one_pole(noise(0.01), 4000), 0.0005, 0.002), gain=0.3)
+write("stone_click", click, peak=0.75)
+write("stone_tap", woodblock(1300, 0.02, 0.09), peak=0.6)
+write("stone_rake", envelope(bandpass(noise(0.4), 120, 900), 0.06, 0.12), peak=0.5)
+
+shishi = woodblock(600, 0.06, 0.3)
+mix(shishi, woodblock(1520, 0.03, 0.15), gain=0.4)
+mix(shishi, tone(180, 0.08, 0.3), gain=0.5)
+for at, f0, f1, g in [(0.28, 900, 1600, 0.25), (0.36, 700, 1300, 0.2), (0.45, 1000, 1800, 0.15), (0.55, 800, 1400, 0.1)]:
+    mix(shishi, sweep(f0, f1, 0.03, 0.02, 0.1), at=at, gain=g)
+write("stone_switch", shishi)
+
+# ── Paper (origami) ───────────────────────────────────────────────────
+snap = envelope(bandpass(noise(0.05), 2000, 9000), 0.0005, 0.008)
+mix(snap, tone(220, 0.02, 0.06), gain=0.4)
+write("paper_tap", snap, peak=0.6)
+
+fold = []
+for at, g in [(0.0, 1.0), (0.045, 0.7), (0.085, 0.5), (0.12, 0.3)]:
+    mix(fold, envelope(bandpass(noise(0.03), 1500, 7000), 0.001, 0.008), at=at, gain=g)
+write("paper_fold", fold, peak=0.55)
+write("paper_flick", envelope(bandpass(noise(0.03), 3000, 10000), 0.0005, 0.004), peak=0.5)
+
+flip = envelope(bandpass(noise(0.5), 400, 4000), 0.18, 0.1)
+mix(flip, snap, at=0.34, gain=0.8)
+write("paper_switch", flip, peak=0.7)
+
+# ── Neon (night city) ─────────────────────────────────────────────────
+def square_sweep(f0, f1, sweep_time, decay, dur):
+    out, phase = [], 0.0
+    for i in range(int(dur * SR)):
+        t = i / SR
+        k = min(t / sweep_time, 1.0)
+        f = f0 * (f1 / f0) ** k
+        phase += 2 * math.pi * f / SR
+        s = sum(math.sin(h * phase) / h for h in (1, 3, 5, 7))
+        out.append(s * math.exp(-t / decay) * min(t / 0.001, 1.0))
+    return one_pole(out, 6000)
+
+
+write("neon_blip", square_sweep(660, 440, 0.04, 0.05, 0.14), peak=0.5)
+
+
+def buzz(f, dur, gate_rate=0.0):
+    out = []
+    for i in range(int(dur * SR)):
+        t = i / SR
+        saw = sum(math.sin(2 * math.pi * f * h * t) / h for h in range(1, 12))
+        gate = 1.0
+        if gate_rate:
+            gate = 0.35 + 0.65 * (1 if random.random() > 0.002 else 0)
+        out.append(saw * gate)
+    return out
+
+
+write("neon_buzz", envelope(one_pole(buzz(120, 0.3, 1), 2500), 0.01, 0.12), peak=0.45)
+
+zap = []
+for k in range(14):
+    mix(zap, envelope(bandpass(noise(0.02), 2000, 8000), 0.0005, 0.004), at=random.uniform(0, 0.35), gain=random.uniform(0.3, 1.0))
+rise = []
+phase = 0.0
+for i in range(int(0.7 * SR)):
+    t = i / SR
+    f = 80 * (3.0 ** (t / 0.7))
+    phase += 2 * math.pi * f / SR
+    rise.append(sum(math.sin(h * phase) / h for h in range(1, 8)) * min(t / 0.2, 1.0) * (1 - t / 0.7) ** 0.5)
+mix(zap, one_pole(rise, 3000), gain=0.6)
+mix(zap, square_sweep(880, 660, 0.03, 0.08, 0.2), at=0.62, gain=0.8)
+write("neon_zap", zap, peak=0.65)
+
+# ── Cosmos (constellation) ────────────────────────────────────────────
+def bell(f, dur=1.2):
+    out = []
+    for i in range(int(dur * SR)):
+        t = i / SR
+        s = (math.sin(2 * math.pi * f * t) * math.exp(-t / 0.9)
+             + 0.5 * math.sin(2 * math.pi * f * 2.76 * t) * math.exp(-t / 0.5)
+             + 0.25 * math.sin(2 * math.pi * f * 5.4 * t) * math.exp(-t / 0.3)
+             + 0.12 * math.sin(2 * math.pi * f * 8.93 * t) * math.exp(-t / 0.2))
+        out.append(s * min(t / 0.002, 1.0))
+    return out
+
+
+write("cosmos_chime", bell(880), peak=0.5)
+sparkle = []
+for k in range(6):
+    mix(sparkle, tone(random.uniform(2000, 4200), 0.06, 0.2), at=k * 0.055, gain=1.0 - k * 0.12)
+write("cosmos_sparkle", sparkle, peak=0.4)
+swell = envelope(one_pole(noise(1.6), 900), 0.45, 0.35)
+swell = [v * 0.5 for v in swell]
+for k, f in enumerate([440, 554.4, 659.3, 880]):
+    mix(swell, bell(f, 1.3), at=0.35 + k * 0.08, gain=0.6)
+write("cosmos_switch", swell, peak=0.6)

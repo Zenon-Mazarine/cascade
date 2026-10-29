@@ -1,6 +1,11 @@
 package com.bidule.cascade.ui
 
 import android.os.Build
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import kotlin.math.min
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.font.FontStyle
@@ -115,6 +120,8 @@ fun AppRow(
     drag: DragCallbacks? = null,
     /** Ink's Scroll layout: a centered word, no icon, notes written underneath like marginalia. */
     word: Boolean = false,
+    /** Neon's street: the row is a glowing sign. The number picks its color and which side it hangs on. */
+    neon: Int = -1,
 ) {
     val look = LocalLook.current
     val context = LocalContext.current
@@ -258,7 +265,7 @@ fun AppRow(
                     translationX = swipeX.value
                 }
                 .clip(RoundedCornerShape(20.dp))
-                .drawBehind { drawPressEffect(look, pressFx, touchPoint, seed, word) }
+                .drawBehind { drawPressEffect(look, pressFx, touchPoint, seed, word, if (neon >= 0) neonColor(look, neon) else null) }
                 .then(gestures)
                 .semantics {
                     onClick(label = "Open ${app.label}") {
@@ -272,7 +279,9 @@ fun AppRow(
                 }
                 .padding(horizontal = 8.dp, vertical = if (big) 10.dp else 8.dp)
         ) {
-            if (word) {
+            if (neon >= 0) {
+                NeonSign(app, neon, notifications.size)
+            } else if (word) {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
@@ -331,7 +340,7 @@ fun AppRow(
                 exit = fadeOut(Motion.soft) + shrinkVertically(),
             ) {
                 lastNotif?.let { n ->
-                    if (word) {
+                    if (word || neon >= 0) {
                         Text(
                             listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(" — "),
                             style = look.style(14.sp, color = look.subtext).copy(
@@ -368,6 +377,64 @@ fun AppRow(
             shortcutsLabel = if (onToggleShortcuts == null) null else if (shortcutsOpen) "Hide shortcuts" else "Shortcuts",
             onShortcuts = { onToggleShortcuts?.invoke() },
         )
+    }
+}
+
+fun neonColor(look: Look, index: Int): Color =
+    if (look.mono) look.text else NeonColors[index.mod(NeonColors.size)]
+
+/** A glowing tube sign that buzzes on and, every so often, flickers. */
+@Composable
+private fun NeonSign(app: AppEntry, index: Int, notifCount: Int) {
+    val look = LocalLook.current
+    val color = neonColor(look, index)
+    val flicker = remember { Animatable(1f) }
+    LaunchedEffect(app.key) {
+        val rnd = kotlin.random.Random(app.key.hashCode())
+        while (true) {
+            delay(5000L + rnd.nextLong(14000L))
+            for (a in floatArrayOf(0.25f, 1f, 0.1f, 0.9f, 0.35f, 1f)) {
+                flicker.snapTo(a)
+                delay(40L + rnd.nextLong(70L))
+            }
+        }
+    }
+    val night = look.mode != ThemeMode.Light
+    val tube = if (night) lerp(color, Color.White, 0.35f) else color
+    val glow = androidx.compose.ui.graphics.Shadow(color.copy(alpha = if (night) 1f else 0.6f), Offset.Zero, if (night) 32f else 16f)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+        horizontalArrangement = if (index % 2 == 0) Arrangement.Start else Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            app.label,
+            style = look.display(36.sp, color = tube).copy(shadow = glow),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .graphicsLayer { alpha = flicker.value },
+        )
+        if (notifCount > 0) {
+            Spacer(Modifier.width(10.dp))
+            Box(
+                Modifier
+                    .drawBehind {
+                        drawRoundRect(
+                            color.copy(alpha = 0.9f),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
+                            style = Stroke(1.5.dp.toPx()),
+                        )
+                    }
+                    .padding(horizontal = 6.dp, vertical = 1.dp),
+            ) {
+                Text(
+                    if (notifCount > 9) "9+" else notifCount.toString(),
+                    style = look.style(12.sp, FontWeight.Bold, tube).copy(shadow = glow),
+                )
+            }
+        }
     }
 }
 
@@ -548,13 +615,17 @@ fun CascadeIn(index: Int, trigger: Int, modifier: Modifier = Modifier, content: 
     val progress = remember { Animatable(0f) }
     LaunchedEffect(trigger) {
         progress.snapTo(0f)
-        delay(index * if (kind == CascadeStyle.Ink) 45L else 32L)
+        delay(index * if (kind == CascadeStyle.Ink || kind == CascadeStyle.Cosmos) 45L else 32L)
         progress.animateTo(
             1f,
             when (kind) {
                 CascadeStyle.Water -> Motion.liquid
                 CascadeStyle.Ink -> tween(520, easing = FastOutSlowInEasing)
                 CascadeStyle.Classic -> Motion.gentle
+                CascadeStyle.Stone -> spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMedium)
+                CascadeStyle.Paper -> tween(520, easing = FastOutSlowInEasing)
+                CascadeStyle.Neon -> tween(700, easing = LinearEasing)
+                CascadeStyle.Cosmos -> tween(900, easing = FastOutSlowInEasing)
             },
         )
     }
@@ -581,14 +652,58 @@ fun CascadeIn(index: Int, trigger: Int, modifier: Modifier = Modifier, content: 
                         null
                     }
                 }
+                // A stone drops into the sand and settles.
+                CascadeStyle.Stone -> {
+                    translationY = -(1f - p) * 60.dp.toPx()
+                    val over = (p - 1f).coerceIn(-0.3f, 0.3f)
+                    scaleY = 1f - over * 0.6f
+                    scaleX = 1f + over * 0.3f
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                }
+                // A card unfolds toward you.
+                CascadeStyle.Paper -> {
+                    rotationX = (1f - p) * 85f
+                    cameraDistance = 14f * density
+                    transformOrigin = TransformOrigin(0.5f, 0f)
+                }
+                // A sign stutters on.
+                CascadeStyle.Neon -> {
+                    alpha = when {
+                        p >= 0.85f -> 1f
+                        (p * 23f).toInt() % 3 == 0 -> 0.06f
+                        else -> 0.25f + p * 0.6f
+                    }
+                }
+                // A star brightens out of nothing.
+                CascadeStyle.Cosmos -> {
+                    val sc = 0.6f + 0.4f * p
+                    scaleX = sc
+                    scaleY = sc
+                }
             }
         }
     ) { content() }
 }
 
 /** The pressed-row effect for each style, drawn behind the row's content. */
-private fun DrawScope.drawPressEffect(look: Look, fx: Float, touch: Offset, seed: Float, word: Boolean = false) {
+private fun DrawScope.drawPressEffect(
+    look: Look,
+    fx: Float,
+    touch: Offset,
+    seed: Float,
+    word: Boolean = false,
+    neonColor: Color? = null,
+) {
     if (fx <= 0.001f) return
+    if (neonColor != null) {
+        drawRoundRect(neonColor.copy(alpha = 0.10f * fx), cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx()))
+        drawRoundRect(
+            neonColor.copy(alpha = 0.6f * fx),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx()),
+            style = Stroke(1.5.dp.toPx()),
+        )
+        return
+    }
     if (word) {
         // A brush underline swept beneath the word.
         val w = size.width * 0.56f
@@ -618,6 +733,42 @@ private fun DrawScope.drawPressEffect(look: Look, fx: Float, touch: Offset, seed
                 ThemeMode.Wallpaper -> 0.18f
             }
             drawPath(brushPath(size.width, size.height, fx, seed), look.effect.copy(alpha = strength))
+        }
+        CascadeStyle.Stone -> {
+            drawRect(look.pressed.copy(alpha = look.pressed.alpha * fx))
+            for (k in 0 until 3) {
+                drawCircle(
+                    look.effect.copy(alpha = 0.4f * fx),
+                    radius = (14 + k * 10).dp.toPx() * (0.4f + 0.6f * fx),
+                    center = touch,
+                    style = Stroke(1.2.dp.toPx()),
+                )
+            }
+        }
+        CascadeStyle.Paper -> {
+            // The corner folds over.
+            val f = min(size.width, size.height) * 0.9f * fx
+            val fold = Path().apply {
+                moveTo(size.width - f, 0f)
+                lineTo(size.width, 0f)
+                lineTo(size.width, f)
+                close()
+            }
+            drawRect(look.pressed.copy(alpha = look.pressed.alpha * fx))
+            drawPath(fold, look.text.copy(alpha = 0.10f * fx))
+            drawLine(look.text.copy(alpha = 0.25f * fx), Offset(size.width - f, 0f), Offset(size.width, f), 1.dp.toPx())
+        }
+        CascadeStyle.Neon -> {
+            drawRoundRect(look.accent.copy(alpha = 0.12f * fx), cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx()))
+        }
+        CascadeStyle.Cosmos -> {
+            val r = hypot(size.width, size.height) * 0.6f * fx
+            drawCircle(
+                Brush.radialGradient(listOf(look.effect.copy(alpha = 0.22f * fx), Color.Transparent), touch, r.coerceAtLeast(1f)),
+                r.coerceAtLeast(1f),
+                touch,
+            )
+            drawSparkle(touch, 7.dp.toPx() * fx, look.effect.copy(alpha = 0.8f * fx))
         }
     }
 }

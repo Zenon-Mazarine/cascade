@@ -108,6 +108,7 @@ class MainActivity : ComponentActivity() {
         val prefs = Prefs(this)
         extras.getString("cascade_style")?.let { prefs.style = it }
         extras.getString("cascade_theme")?.let { prefs.theme = it }
+        DebugFlags.openStylePicker = extras.getBoolean("cascade_picker", false)
         if (extras.getBoolean("cascade_demo", false)) {
             val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
             val keys = packageManager.queryIntentActivities(launcher, 0)
@@ -148,14 +149,13 @@ private fun CascadeApp(vm: LauncherViewModel, homeTick: Int, resumeTick: Int) {
 
     // One tap: ripple or ink-bloom out from the button, swap style while the screen is covered,
     // then let it drain away to reveal the new look.
-    val onSwitchStyle: (Offset) -> Unit = { origin ->
+    val onSwitchStyle: (Offset, CascadeStyle) -> Unit = { origin, target ->
         if (switching == null) {
-            val target = if (look.kind == CascadeStyle.Water) CascadeStyle.Ink else CascadeStyle.Water
             feel.styleSwitch(target)
             val sw = StyleSwitch(origin, target)
             switching = sw
             scope.launch {
-                sw.progress.animateTo(0.5f, tween(if (target == CascadeStyle.Ink) 520 else 440, easing = FastOutSlowInEasing))
+                sw.progress.animateTo(0.5f, tween(if (target == CascadeStyle.Water) 440 else 520, easing = FastOutSlowInEasing))
                 vm.setStyle(target)
                 sw.progress.animateTo(1f, tween(560, easing = LinearOutSlowInEasing))
                 switching = null
@@ -195,4 +195,9 @@ private fun CascadeApp(vm: LauncherViewModel, homeTick: Int, resumeTick: Int) {
         }
         StyleSwitchLayer(switching)
     }
+}
+
+/** Set from screenshot automation only. */
+object DebugFlags {
+    var openStylePicker = false
 }

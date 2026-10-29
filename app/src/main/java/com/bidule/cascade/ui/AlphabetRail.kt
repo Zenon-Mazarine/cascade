@@ -66,7 +66,7 @@ fun AlphabetRail(
         when (kind) {
             CascadeStyle.Water -> 60.dp
             CascadeStyle.Ink -> 46.dp
-            CascadeStyle.Classic -> 54.dp
+            else -> 54.dp
         }.toPx()
     }
     val sigmaPx = with(density) { (if (kind == CascadeStyle.Water) 52.dp else 46.dp).toPx() }
@@ -80,7 +80,7 @@ fun AlphabetRail(
         when (kind) {
             CascadeStyle.Water -> Motion.liquid
             CascadeStyle.Ink -> Motion.brush
-            CascadeStyle.Classic -> Motion.bouncy
+            else -> Motion.bouncy
         },
         label = "wave",
     )
@@ -132,7 +132,7 @@ fun AlphabetRail(
                                 look.effect.copy(alpha = if (look.isLight) 0.12f else 0.18f),
                             )
                         }
-                        CascadeStyle.Classic -> Unit
+                        else -> Unit
                     }
                 }
                 .pointerInput(letters) {
@@ -207,7 +207,7 @@ fun AlphabetRail(
                                     look.accent.copy(alpha = 0.22f),
                                     radius = maxOf(size.width, size.height) * 0.75f,
                                 )
-                                CascadeStyle.Classic -> Unit
+                                else -> Unit
                             }
                         },
                 )

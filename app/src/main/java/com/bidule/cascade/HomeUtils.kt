@@ -2,6 +2,7 @@ package com.bidule.cascade
 
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -59,6 +60,41 @@ object HomeUtils {
                 )
             }
             .sortedByDescending { it.packageName == previous }
+    }
+
+    private fun alias(context: Context) = ComponentName(context, "com.bidule.cascade.HomeAlias")
+
+    /** Whether Cascade is currently offering itself as a home screen at all. */
+    fun isHomeEnabled(context: Context): Boolean =
+        context.packageManager.getComponentEnabledSetting(alias(context)) !=
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+
+    fun setHomeEnabled(context: Context, enabled: Boolean) {
+        context.packageManager.setComponentEnabledSetting(
+            alias(context),
+            if (enabled) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP,
+        )
+    }
+
+    /**
+     * The "Original" button. Cascade stops being a home screen, so Android falls straight back
+     * to the phone's own launcher, with its icons, folders and widgets exactly as they were
+     * (Cascade never touched them). Opening Cascade again later lets you switch back.
+     */
+    fun restoreOriginal(context: Context) {
+        val previous = Prefs(context).previousHome
+        setHomeEnabled(context, false)
+        val home = homeIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (previous != null && isInstalled(context, previous)) home.setPackage(previous)
+        AppRepository.safeStart(context, home)
+    }
+
+    private fun isInstalled(context: Context, pkg: String): Boolean = try {
+        context.packageManager.getPackageInfo(pkg, 0)
+        true
+    } catch (e: PackageManager.NameNotFoundException) {
+        false
     }
 
     /** Opens Settings › Default apps › Home app. */

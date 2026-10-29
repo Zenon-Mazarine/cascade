@@ -58,13 +58,23 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Makes it eligible to be the home screen -->
+        </activity>
+
+        <!--
+            The "home screen" entry point lives on an alias so Cascade can switch it off itself.
+            Disabling it hands the phone straight back to its original home screen, untouched.
+        -->
+        <activity-alias
+            android:name=".HomeAlias"
+            android:enabled="true"
+            android:exported="true"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity>
+        </activity-alias>
 
         <service
             android:name=".NotificationService"
