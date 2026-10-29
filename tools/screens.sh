@@ -6,11 +6,9 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 adb shell settings put system screen_off_timeout 600000
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard || true
-# A tidy status bar and a fixed time for store screenshots.
-adb root || true
-sleep 3
-adb shell settings put global auto_time 0 || true
-adb shell date 102910422026.00 || true
+# A tidy status bar for store screenshots; keep system "not responding" dialogs out of the way.
+adb shell settings put global hide_error_dialogs 1 || true
+adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
 adb shell settings put global sysui_demo_allowed 1
 dm() { adb shell am broadcast -a com.android.systemui.demo -e command "$@" > /dev/null; }
 dm enter
@@ -23,6 +21,7 @@ dm notifications -e visible false
 shot() {
   local name=$1; shift
   adb shell am force-stop com.bidule.cascade
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null || true
   adb shell am start -W -n com.bidule.cascade/.MainActivity "$@"
   sleep 8
   adb exec-out screencap -p > "shots/$name.png"
