@@ -11,7 +11,6 @@ adb shell settings put global hide_error_dialogs 1 || true
 adb shell settings put global sysui_demo_allowed 1
 dm() { adb shell am broadcast -a com.android.systemui.demo -e command "$@" > /dev/null; }
 dm enter
-dm clock -e hhmm 1042
 dm battery -e level 100 -e plugged false
 dm network -e wifi show -e level 4
 dm network -e mobile show -e datatype none -e level 4
@@ -22,6 +21,7 @@ shot() {
   adb shell am force-stop com.bidule.cascade
   adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null || true
   adb shell am start -W -n com.bidule.cascade/.MainActivity "$@"
+  dm clock -e hhmm "$(adb shell date +%H%M | tr -d '\r')"
   sleep 8
   adb exec-out screencap -p > "shots/$name.png"
 }

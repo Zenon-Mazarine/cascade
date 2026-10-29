@@ -79,15 +79,16 @@ fun Paywall(
             .systemBarsPadding(),
         contentAlignment = Alignment.Center,
     ) {
-        Column(
-            Modifier
+        androidx.compose.material3.Surface(
+            modifier = Modifier
                 .padding(20.dp)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(30.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                .padding(22.dp),
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
+            shape = RoundedCornerShape(30.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 12.dp,
         ) {
+        Column(Modifier.padding(22.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Cascade Pro",
@@ -182,6 +183,7 @@ fun Paywall(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Restore purchase", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)) }
+        }
         }
     }
 }
