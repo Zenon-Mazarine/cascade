@@ -200,7 +200,8 @@ private fun BookmarkTile(app: AppEntry, editing: Boolean, onClick: () -> Unit) {
     ) {
         Box {
             Image(app.icon, contentDescription = null, colorFilter = look.iconFilter, modifier = Modifier.size(50.dp))
-            AnimatedVisibility(
+            // Fully qualified: inside a Column the ColumnScope overload would be picked otherwise.
+            androidx.compose.animation.AnimatedVisibility(
                 visible = editing,
                 enter = scaleIn(Motion.bouncy),
                 exit = scaleOut(tween(120)) + fadeOut(tween(120)),
