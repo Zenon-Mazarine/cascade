@@ -39,7 +39,28 @@ class Prefs(context: Context) {
             sp.edit().putBoolean(KEY_MONO, value).apply()
         }
 
+    var style: String
+        get() = sp.getString(KEY_STYLE, "Water") ?: "Water"
+        set(value) {
+            sp.edit().putString(KEY_STYLE, value).apply()
+        }
+
+    var sound: Boolean
+        get() = sp.getBoolean(KEY_SOUND, true)
+        set(value) {
+            sp.edit().putBoolean(KEY_SOUND, value).apply()
+        }
+
+    var haptics: Boolean
+        get() = sp.getBoolean(KEY_HAPTICS, true)
+        set(value) {
+            sp.edit().putBoolean(KEY_HAPTICS, value).apply()
+        }
+
     private companion object {
+        const val KEY_STYLE = "style"
+        const val KEY_SOUND = "sound"
+        const val KEY_HAPTICS = "haptics"
         const val KEY_THEME = "theme"
         const val KEY_BOOKMARKS = "bookmarks"
         const val KEY_MONO = "mono"

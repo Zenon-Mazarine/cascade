@@ -102,9 +102,10 @@ fun HomeScreen(
     homeTick: Int,
     resumeTick: Int,
     onOpenSettings: () -> Unit,
+    onSwitchStyle: (Offset) -> Unit,
 ) {
     val context = LocalContext.current
-    val haptics = LocalHapticFeedback.current
+    val feel = LocalFeel.current
     val look = LocalLook.current
 
     val apps by vm.apps.collectAsStateWithLifecycle()
@@ -165,7 +166,7 @@ fun HomeScreen(
             vm.moveFavoriteTo(key, toIndex)
             // Keep the dragged row under the finger now that its slot moved.
             dragOffset += current.offset - target.offset
-            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            feel.swap()
         },
         onEnd = {
             dragActive = false
@@ -190,6 +191,7 @@ fun HomeScreen(
     }
 
     val launch: (AppEntry) -> Unit = { app ->
+        feel.launch()
         closeAll()
         AppRepository.launch(context, app)
     }
@@ -242,7 +244,14 @@ fun HomeScreen(
         label = "blur",
     )
 
-    Box(Modifier.fillMaxSize().systemBarsPadding()) {
+    val touchMarks = remember(scope) { TouchMarks(scope) }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .systemBarsPadding()
+            .observeTouches(touchMarks, look.kind)
+    ) {
 
         // Favorites, stacked from the bottom so they sit under your thumb.
         LazyColumn(
@@ -262,7 +271,7 @@ fun HomeScreen(
                 }
             }
             item(key = "clock") {
-                CascadeIn(0, resumeTick) { ClockHeader(resumeTick, onLongPress = onOpenSettings) }
+                CascadeIn(0, resumeTick) { ClockHeader(resumeTick, onLongPress = onOpenSettings, onSwitchStyle = onSwitchStyle) }
             }
             item(key = "gap") { Spacer(Modifier.height(22.dp)) }
             if (favorites.isEmpty() && apps.isNotEmpty()) {
@@ -294,6 +303,9 @@ fun HomeScreen(
                 CascadeIn(index + 1, resumeTick, itemModifier) { rowFor(app, true) }
             }
         }
+
+        // Ripples / ink drops where you touch.
+        TouchMarksLayer(touchMarks)
 
         // Tap anywhere outside the panel to close it.
         if (panelOpen || folderOpen) {
@@ -341,7 +353,10 @@ fun HomeScreen(
                 apps = bookmarked,
                 editing = folderEditing,
                 openCount = folderOpens,
-                onToggleEdit = { folderEditing = !folderEditing },
+                onToggleEdit = {
+                    feel.toggle()
+                    folderEditing = !folderEditing
+                },
                 onLaunch = launch,
                 onRemove = vm::toggleBookmark,
                 onAdd = { pickerOpen = true },
@@ -355,8 +370,9 @@ fun HomeScreen(
                 folderOpen = false
                 folderEditing = false
                 if (c != panelLetter) {
+                    if (panelLetter == null) feel.open()
                     panelLetter = c
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    feel.letter(letters.indexOf(c), letters.size)
                 }
             },
             onSearch = { searchOpen = true },
@@ -369,7 +385,7 @@ fun HomeScreen(
                 } else {
                     folderOpens++
                     folderOpen = true
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    feel.open()
                 }
             },
             modifier = Modifier
@@ -394,7 +410,10 @@ fun HomeScreen(
             BookmarkPicker(
                 apps = apps,
                 selected = bookmarkKeys,
-                onToggle = vm::toggleBookmark,
+                onToggle = {
+                    feel.toggle()
+                    vm.toggleBookmark(it)
+                },
                 onDone = {
                     pickerOpen = false
                     folderOpens++
@@ -426,11 +445,7 @@ private fun LetterPanel(letter: Char, apps: List<AppEntry>, row: @Composable (Ap
             label = "letter",
         ) { l ->
             Column(Modifier.padding(vertical = 16.dp)) {
-                Text(
-                    l.toString(),
-                    style = look.style(30.sp, FontWeight.Bold, look.accent).copy(shadow = null),
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 2.dp),
-                )
+                LetterBadge(l, Modifier.padding(horizontal = 20.dp, vertical = 2.dp))
                 LazyColumn(contentPadding = PaddingValues(horizontal = 10.dp)) {
                     itemsIndexed(apps.filter { it.letter == l }, key = { _, a -> a.key }) { i, app ->
                         CascadeIn(i, l.code) { row(app) }
@@ -443,7 +458,7 @@ private fun LetterPanel(letter: Char, apps: List<AppEntry>, row: @Composable (Ap
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ClockHeader(resumeTick: Int, onLongPress: () -> Unit) {
+private fun ClockHeader(resumeTick: Int, onLongPress: () -> Unit, onSwitchStyle: (Offset) -> Unit) {
     val context = LocalContext.current
     val look = LocalLook.current
     // Re-keyed on resume because coroutine delays pause while the phone sleeps.
@@ -458,9 +473,10 @@ private fun ClockHeader(resumeTick: Int, onLongPress: () -> Unit) {
     val date = now.format(DateTimeFormatter.ofPattern("EEEE d MMMM", locale))
         .replaceFirstChar { it.titlecase(locale) }
 
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
     Column(
         Modifier
-            .fillMaxWidth()
+            .weight(1f)
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -482,9 +498,12 @@ private fun ClockHeader(resumeTick: Int, onLongPress: () -> Unit) {
             },
             label = "clock",
         ) { t ->
-            Text(t, style = look.style(70.sp, FontWeight.Light))
+            Text(t, style = look.display(72.sp))
         }
         Text(date, style = look.style(17.sp, color = look.subtext))
+    }
+    // One tap to change the whole personality of the launcher.
+    StyleOrb(onSwitch = onSwitchStyle, modifier = Modifier.padding(bottom = 6.dp, end = 4.dp))
     }
 }
 

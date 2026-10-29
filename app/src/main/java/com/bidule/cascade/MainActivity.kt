@@ -20,7 +20,14 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.geometry.Offset
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -35,7 +42,14 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.bidule.cascade.ui.CascadeStyle
 import com.bidule.cascade.ui.CascadeTheme
+import com.bidule.cascade.ui.Feel
+import com.bidule.cascade.ui.Haptics
+import com.bidule.cascade.ui.LocalFeel
+import com.bidule.cascade.ui.StyleBackdrop
+import com.bidule.cascade.ui.StyleSwitch
+import com.bidule.cascade.ui.StyleSwitchLayer
 import com.bidule.cascade.ui.HomeScreen
 import com.bidule.cascade.ui.LocalLook
 import com.bidule.cascade.ui.SettingsScreen
@@ -55,11 +69,17 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        Sounds.init(this)
+        val haptics = Haptics(this)
         setContent {
             val vm: LauncherViewModel = viewModel()
             val mode by vm.themeMode.collectAsStateWithLifecycle()
             val mono by vm.mono.collectAsStateWithLifecycle()
-            val look = remember(mode, mono) { lookFor(mode, mono) }
+            val style by vm.style.collectAsStateWithLifecycle()
+            val soundOn by vm.sound.collectAsStateWithLifecycle()
+            val hapticsOn by vm.haptics.collectAsStateWithLifecycle()
+            val look = remember(mode, mono, style) { lookFor(mode, mono, style) }
+            val feel = remember(style, soundOn, hapticsOn) { Feel(haptics, style, soundOn, hapticsOn) }
 
             // Dark status-bar icons on the light theme, light icons otherwise.
             val view = LocalView.current
@@ -71,7 +91,9 @@ class MainActivity : ComponentActivity() {
             }
 
             CascadeTheme(look) {
-                CascadeApp(vm, homeTicks.intValue, resumeTicks.intValue)
+                CompositionLocalProvider(LocalFeel provides feel) {
+                    CascadeApp(vm, homeTicks.intValue, resumeTicks.intValue)
+                }
             }
         }
     }
@@ -98,7 +120,30 @@ private fun CascadeApp(vm: LauncherViewModel, homeTick: Int, resumeTick: Int) {
     val slide = spring<IntOffset>(dampingRatio = 0.86f, stiffness = Spring.StiffnessMediumLow)
     val fade = spring<Float>(stiffness = Spring.StiffnessMediumLow)
 
-    Box(Modifier.fillMaxSize().background(LocalLook.current.background)) {
+    val look = LocalLook.current
+    val feel = LocalFeel.current
+    val scope = rememberCoroutineScope()
+    var switching by remember { mutableStateOf<StyleSwitch?>(null) }
+
+    // One tap: ripple or ink-bloom out from the button, swap style while the screen is covered,
+    // then let it drain away to reveal the new look.
+    val onSwitchStyle: (Offset) -> Unit = { origin ->
+        if (switching == null) {
+            val target = if (look.kind == CascadeStyle.Water) CascadeStyle.Ink else CascadeStyle.Water
+            feel.styleSwitch(target)
+            val sw = StyleSwitch(origin, target)
+            switching = sw
+            scope.launch {
+                sw.progress.animateTo(0.5f, tween(if (target == CascadeStyle.Ink) 520 else 440, easing = FastOutSlowInEasing))
+                vm.setStyle(target)
+                sw.progress.animateTo(1f, tween(560, easing = LinearOutSlowInEasing))
+                switching = null
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(look.background)) {
+        StyleBackdrop()
         AnimatedContent(
             targetState = screen,
             transitionSpec = {
@@ -118,6 +163,7 @@ private fun CascadeApp(vm: LauncherViewModel, homeTick: Int, resumeTick: Int) {
                     homeTick = homeTick,
                     resumeTick = resumeTick,
                     onOpenSettings = { screen = Screen.Settings },
+                    onSwitchStyle = onSwitchStyle,
                 )
                 Screen.Settings -> SettingsScreen(
                     vm = vm,
@@ -126,5 +172,6 @@ private fun CascadeApp(vm: LauncherViewModel, homeTick: Int, resumeTick: Int) {
                 )
             }
         }
+        StyleSwitchLayer(switching)
     }
 }

@@ -3,6 +3,8 @@
 
     <!-- Lets the uninstall option in the long-press menu work. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Style-specific haptics -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Swipe down on the home screen to open notifications. -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 

@@ -1,7 +1,16 @@
 package com.bidule.cascade.ui
 
+import android.os.Build
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.hypot
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -48,12 +57,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
@@ -104,12 +111,14 @@ fun AppRow(
 ) {
     val look = LocalLook.current
     val context = LocalContext.current
-    val haptics = LocalHapticFeedback.current
+    val feel = LocalFeel.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
     var menuOpen by remember { mutableStateOf(false) }
     var pressed by remember { mutableStateOf(false) }
+    var touchPoint by remember { mutableStateOf(Offset.Zero) }
+    val seed = remember(app.key) { (app.key.hashCode() and 0xFFFF) / 6553.5f }
     val swipeX = remember { Animatable(0f) }
 
     val currentLaunch by rememberUpdatedState(onLaunch)
@@ -120,9 +129,11 @@ fun AppRow(
     val swipeMaxPx = with(density) { 90.dp.toPx() }
 
     val scale by animateFloatAsState(if (pressed || menuOpen) 0.95f else 1f, Motion.bouncy, label = "press")
-    val pressBg by animateColorAsState(
-        if (pressed || menuOpen || shortcutsOpen) look.pressed else Color.Transparent,
-        label = "pressBg",
+    // 0→1 while the row is held: drives the ripple (Water), brushstroke (Ink) or plain highlight.
+    val pressFx by animateFloatAsState(
+        if (pressed || menuOpen || shortcutsOpen) 1f else 0f,
+        if (look.kind == CascadeStyle.Ink) tween(300) else tween(420),
+        label = "pressFx",
     )
 
     // Keep the last notification on screen while it folds away.
@@ -133,6 +144,7 @@ fun AppRow(
     val gestures = Modifier.pointerInput(app.key) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
+            touchPoint = down.position
             // A short delay so a row doesn't flash "pressed" when you're just scrolling past it.
             val pressJob = scope.launch {
                 delay(70)
@@ -183,7 +195,7 @@ fun AppRow(
                             val shown = (x.coerceAtLeast(0f) * 0.55f).coerceAtMost(swipeMaxPx)
                             scope.launch { swipeX.snapTo(shown) }
                             val nowArmed = x > swipeTriggerPx
-                            if (nowArmed && !armed) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (nowArmed && !armed) feel.swap()
                             armed = nowArmed
                         }
                         if (armed) currentShortcuts?.invoke()
@@ -194,7 +206,7 @@ fun AppRow(
 
                     // Timed out while still holding: a long press.
                     null -> {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        feel.longPress()
                         pressed = true
                         menuOpen = true
                         val dragCallbacks = currentDrag
@@ -239,7 +251,7 @@ fun AppRow(
                     translationX = swipeX.value
                 }
                 .clip(RoundedCornerShape(20.dp))
-                .background(pressBg)
+                .drawBehind { drawPressEffect(look, pressFx, touchPoint, seed) }
                 .then(gestures)
                 .semantics {
                     onClick(label = "Open ${app.label}") {
@@ -453,21 +465,77 @@ private fun NotificationLine(
 }
 
 /**
- * Wraps a list item so it floats up into place, each one a beat after the one before:
- * the "cascade" you see every time you come home.
+ * Wraps a list item so it arrives one beat after the one before: the "cascade" you see every
+ * time you come home. Classic floats up, Water drops in and squashes like a droplet,
+ * Ink bleeds in from a blur like wet ink.
  */
 @Composable
 fun CascadeIn(index: Int, trigger: Int, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val kind = LocalLook.current.kind
     val progress = remember { Animatable(0f) }
     LaunchedEffect(trigger) {
         progress.snapTo(0f)
-        delay(index * 32L)
-        progress.animateTo(1f, Motion.gentle)
+        delay(index * if (kind == CascadeStyle.Ink) 45L else 32L)
+        progress.animateTo(
+            1f,
+            when (kind) {
+                CascadeStyle.Water -> Motion.liquid
+                CascadeStyle.Ink -> tween(520, easing = FastOutSlowInEasing)
+                CascadeStyle.Classic -> Motion.gentle
+            },
+        )
     }
     Box(
         modifier.graphicsLayer {
-            alpha = progress.value.coerceIn(0f, 1f)
-            translationY = (1f - progress.value) * 48.dp.toPx()
+            val p = progress.value
+            alpha = p.coerceIn(0f, 1f)
+            when (kind) {
+                CascadeStyle.Classic -> translationY = (1f - p) * 48.dp.toPx()
+                CascadeStyle.Water -> {
+                    translationY = -(1f - p) * 36.dp.toPx()
+                    // Overshoot past 1 squashes the row like a landing droplet.
+                    val over = (p - 1f).coerceIn(-0.3f, 0.3f)
+                    scaleY = 1f - over * 0.9f
+                    scaleX = 1f + over * 0.5f
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                }
+                CascadeStyle.Ink -> {
+                    translationX = -(1f - p) * 10.dp.toPx()
+                    val blur = (1f - p) * 14.dp.toPx()
+                    renderEffect = if (Build.VERSION.SDK_INT >= 31 && blur > 0.5f) {
+                        BlurEffect(blur, blur, TileMode.Decal)
+                    } else {
+                        null
+                    }
+                }
+            }
         }
     ) { content() }
+}
+
+/** The pressed-row effect for each style, drawn behind the row's content. */
+private fun DrawScope.drawPressEffect(look: Look, fx: Float, touch: Offset, seed: Float) {
+    if (fx <= 0.001f) return
+    when (look.kind) {
+        CascadeStyle.Classic -> drawRect(look.pressed.copy(alpha = look.pressed.alpha * fx))
+        CascadeStyle.Water -> {
+            val maxR = hypot(size.width, size.height)
+            val strength = if (look.mode == ThemeMode.Wallpaper) 0.20f else 0.14f
+            drawCircle(look.effect.copy(alpha = strength * fx), radius = maxR * fx, center = touch)
+            drawCircle(
+                look.effect.copy(alpha = 0.35f * (1f - fx)),
+                radius = maxR * fx * 0.6f,
+                center = touch,
+                style = Stroke(1.5.dp.toPx()),
+            )
+        }
+        CascadeStyle.Ink -> {
+            val strength = when (look.mode) {
+                ThemeMode.Light -> 0.10f
+                ThemeMode.Dark -> 0.12f
+                ThemeMode.Wallpaper -> 0.18f
+            }
+            drawPath(brushPath(size.width, size.height, fx, seed), look.effect.copy(alpha = strength))
+        }
+    }
 }

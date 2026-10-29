@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -70,6 +71,9 @@ import com.bidule.cascade.Prefs
 fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
     val context = LocalContext.current
     val look = LocalLook.current
+    val feel = LocalFeel.current
+    val soundOn by vm.sound.collectAsStateWithLifecycle()
+    val hapticsOn by vm.haptics.collectAsStateWithLifecycle()
     BackHandler(onBack = onBack)
 
     var roleTick by remember { mutableIntStateOf(0) }
@@ -127,6 +131,61 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                     Text("Cascade settings", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            // ── Style ────────────────────────────────────────────────────
+            item {
+                Section(title = "Style") {
+                    Text(
+                        "Changes the whole feel: visuals, motion, sounds and vibration. " +
+                            "Tap the droplet / ensō next to the clock to switch between Water and Ink.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CascadeStyle.entries.forEach { st ->
+                            val selected = st == look.kind
+                            val bg by animateColorAsState(
+                                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
+                                label = "styleBg",
+                            )
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(bg)
+                                    .clickable {
+                                        if (!selected) {
+                                            feel.styleSwitch(st)
+                                            vm.setStyle(st)
+                                        }
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(st.label, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        st.blurb,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                    )
+                                }
+                                if (selected) {
+                                    Icon(Icons.Filled.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    SwitchRow("Sounds", "Quiet interface sounds. Muted when your phone is on silent.", soundOn) {
+                        vm.setSound(it)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    SwitchRow("Vibration", "Style-specific haptics for taps, letters and drags.", hapticsOn) {
+                        vm.setHaptics(it)
+                    }
                 }
             }
 
@@ -333,6 +392,21 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.Medium)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 

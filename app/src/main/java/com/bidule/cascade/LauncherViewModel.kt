@@ -14,6 +14,7 @@ import androidx.lifecycle.viewModelScope
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import com.bidule.cascade.ui.CascadeStyle
 import com.bidule.cascade.ui.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +50,32 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private val _mono = MutableStateFlow(prefs.mono)
     val mono: StateFlow<Boolean> = _mono.asStateFlow()
+
+    private val _style = MutableStateFlow(
+        CascadeStyle.entries.firstOrNull { it.name == prefs.style } ?: CascadeStyle.Water
+    )
+    val style: StateFlow<CascadeStyle> = _style.asStateFlow()
+
+    private val _sound = MutableStateFlow(prefs.sound)
+    val sound: StateFlow<Boolean> = _sound.asStateFlow()
+
+    private val _haptics = MutableStateFlow(prefs.haptics)
+    val haptics: StateFlow<Boolean> = _haptics.asStateFlow()
+
+    fun setStyle(style: CascadeStyle) {
+        _style.value = style
+        prefs.style = style.name
+    }
+
+    fun setSound(enabled: Boolean) {
+        _sound.value = enabled
+        prefs.sound = enabled
+    }
+
+    fun setHaptics(enabled: Boolean) {
+        _haptics.value = enabled
+        prefs.haptics = enabled
+    }
 
     fun setTheme(mode: ThemeMode) {
         _themeMode.value = mode
@@ -121,6 +148,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         put("bookmarks", JSONArray(_bookmarks.value))
         put("theme", _themeMode.value.name)
         put("mono", _mono.value)
+        put("style", _style.value.name)
+        put("sound", _sound.value)
+        put("haptics", _haptics.value)
     }.toString(2)
 
     /** Returns false if [text] isn't a Cascade backup. */
@@ -139,6 +169,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
         ThemeMode.entries.firstOrNull { it.name == o.optString("theme") }?.let(::setTheme)
         if (o.has("mono")) setMono(o.optBoolean("mono"))
+        CascadeStyle.entries.firstOrNull { it.name == o.optString("style") }?.let(::setStyle)
+        if (o.has("sound")) setSound(o.optBoolean("sound"))
+        if (o.has("haptics")) setHaptics(o.optBoolean("haptics"))
         return true
     }
 
