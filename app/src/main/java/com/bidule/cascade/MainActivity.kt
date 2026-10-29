@@ -129,6 +129,10 @@ class MainActivity : ComponentActivity() {
         extras.getString("cascade_style")?.let { prefs.style = it }
         extras.getString("cascade_theme")?.let { prefs.theme = it }
         DebugFlags.openStylePicker = extras.getBoolean("cascade_picker", false)
+        DebugFlags.paywall = extras.getString("cascade_paywall")
+        DebugFlags.clean = extras.getBoolean("cascade_clean", false)
+        if (extras.containsKey("cascade_pro")) prefs.proOwned = extras.getBoolean("cascade_pro")
+        prefs.onboarded = !extras.getBoolean("cascade_onboarding", false)
         if (extras.getBoolean("cascade_demo", false)) {
             val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
             val keys = packageManager.queryIntentActivities(launcher, 0)
@@ -176,7 +180,13 @@ private fun CascadeApp(
     var switching by remember { mutableStateOf<StyleSwitch?>(null) }
     var paywallFor by remember { mutableStateOf<CascadeStyle?>(null) }
     var previewEnded by remember { mutableStateOf(false) }
-    var showOnboarding by remember { mutableStateOf(!vm.onboarded && !BuildConfig.SCREENSHOT_MODE) }
+    var showOnboarding by remember { mutableStateOf(!vm.onboarded) }
+    LaunchedEffect(Unit) {
+        DebugFlags.paywall?.let { name ->
+            paywallFor = CascadeStyle.entries.firstOrNull { it.name == name }
+            DebugFlags.paywall = null
+        }
+    }
     var lastOrigin by remember { mutableStateOf(Offset.Zero) }
 
     // A preview just ran out: go back to the free style and say so.
@@ -293,4 +303,7 @@ private fun CascadeApp(
 /** Set from screenshot automation only. */
 object DebugFlags {
     var openStylePicker = false
+    var paywall: String? = null
+    /** Hide the "Preview mode" pill for store screenshots. */
+    var clean = false
 }

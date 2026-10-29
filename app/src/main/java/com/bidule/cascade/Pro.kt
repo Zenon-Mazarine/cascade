@@ -44,7 +44,7 @@ object Pro {
         if (client != null) return
         val p = Prefs(context)
         prefs = p
-        if (BuildConfig.ALL_UNLOCKED || BuildConfig.SCREENSHOT_MODE) {
+        if (BuildConfig.ALL_UNLOCKED) {
             _owned.value = true
             _status.value = Status.Owned
             return

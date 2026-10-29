@@ -125,7 +125,7 @@ fun HomeScreen(
     val letters = remember(apps) { apps.map { it.letter }.distinct() }
     val appsByPackage = remember(apps) { apps.associateBy { it.packageName } }
     val groups = remember(letters) { indexGroups(letters) }
-    val isDefaultHome = remember(resumeTick) { HomeUtils.isDefaultHome(context) }
+    val isDefaultHome = remember(resumeTick) { com.bidule.cascade.DebugFlags.clean || HomeUtils.isDefaultHome(context) }
 
     var panelLetter by remember { mutableStateOf<Char?>(null) }
     var searchOpen by remember { mutableStateOf(false) }
