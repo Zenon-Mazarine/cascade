@@ -39,6 +39,20 @@ class Prefs(context: Context) {
             sp.edit().putBoolean(KEY_MONO, value).apply()
         }
 
+    /** How often each app was opened from Cascade: sizes the bubbles in the Pool. */
+    var launchCounts: Map<String, Int>
+        get() = sp.getString(KEY_COUNTS, null)
+            ?.split("|")
+            ?.mapNotNull { e ->
+                val i = e.lastIndexOf('=')
+                if (i <= 0) null else e.substring(0, i) to (e.substring(i + 1).toIntOrNull() ?: 0)
+            }
+            ?.toMap()
+            .orEmpty()
+        set(value) {
+            sp.edit().putString(KEY_COUNTS, value.entries.joinToString("|") { "${it.key}=${it.value}" }).apply()
+        }
+
     var style: String
         get() = sp.getString(KEY_STYLE, "Water") ?: "Water"
         set(value) {
@@ -59,6 +73,7 @@ class Prefs(context: Context) {
 
     private companion object {
         const val KEY_STYLE = "style"
+        const val KEY_COUNTS = "launch_counts"
         const val KEY_SOUND = "sound"
         const val KEY_HAPTICS = "haptics"
         const val KEY_THEME = "theme"

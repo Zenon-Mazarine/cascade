@@ -58,6 +58,11 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.foundation.lazy.LazyItemScope
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
@@ -112,11 +117,14 @@ fun HomeScreen(
     val favoriteKeys by vm.favorites.collectAsStateWithLifecycle()
     val bookmarkKeys by vm.bookmarks.collectAsStateWithLifecycle()
     val notifications by NotificationStore.state.collectAsStateWithLifecycle()
+    val launchCounts by vm.launchCounts.collectAsStateWithLifecycle()
 
     val appsByKey = remember(apps) { apps.associateBy { it.key } }
     val favorites = remember(appsByKey, favoriteKeys) { favoriteKeys.mapNotNull { appsByKey[it] } }
     val bookmarked = remember(appsByKey, bookmarkKeys) { bookmarkKeys.mapNotNull { appsByKey[it] } }
     val letters = remember(apps) { apps.map { it.letter }.distinct() }
+    val appsByPackage = remember(apps) { apps.associateBy { it.packageName } }
+    val groups = remember(letters) { indexGroups(letters) }
     val isDefaultHome = remember(resumeTick) { HomeUtils.isDefaultHome(context) }
 
     var panelLetter by remember { mutableStateOf<Char?>(null) }
@@ -127,6 +135,10 @@ fun HomeScreen(
     var pickerOpen by remember { mutableStateOf(false) }
     /** Which row has its shortcuts unfolded: "fav:<key>" or "list:<key>". */
     var shortcutsFor by remember { mutableStateOf<String?>(null) }
+    /** Water: the all-apps sheet. Ink: which thumb-index page is open. Both: the shortcut card. */
+    var allAppsOpen by remember { mutableStateOf(false) }
+    var indexGroup by remember { mutableStateOf<Int?>(null) }
+    var shortcutCardFor by remember { mutableStateOf<AppEntry?>(null) }
 
     // Drag-to-reorder state for the favorites list.
     val listState = rememberLazyListState()
@@ -143,6 +155,9 @@ fun HomeScreen(
         folderEditing = false
         pickerOpen = false
         shortcutsFor = null
+        allAppsOpen = false
+        indexGroup = null
+        shortcutCardFor = null
     }
 
     fun dragCallbacks(key: String) = DragCallbacks(
@@ -192,6 +207,7 @@ fun HomeScreen(
 
     val launch: (AppEntry) -> Unit = { app ->
         feel.launch()
+        vm.recordLaunch(app.key)
         closeAll()
         AppRepository.launch(context, app)
     }
@@ -207,6 +223,7 @@ fun HomeScreen(
             shortcutsOpen = shortcutsFor == shortcutId,
             onToggleShortcuts = { shortcutsFor = if (shortcutsFor == shortcutId) null else shortcutId },
             drag = if (big) dragCallbacks(app.key) else null,
+            word = big && look.kind == CascadeStyle.Ink,
             isBookmarked = app.key in bookmarkKeys,
             onToggleBookmark = vm::toggleBookmark,
         )
@@ -236,7 +253,8 @@ fun HomeScreen(
     }
 
     val panelOpen = panelLetter != null
-    val anyOverlay = panelOpen || searchOpen || folderOpen || pickerOpen
+    val anyOverlay = panelOpen || searchOpen || folderOpen || pickerOpen ||
+        allAppsOpen || indexGroup != null || shortcutCardFor != null
     val listAlpha by animateFloatAsState(if (anyOverlay) 0.25f else 1f, Motion.soft, label = "dim")
     val listBlur by animateDpAsState(
         if (anyOverlay) 14.dp else 0.dp,
@@ -246,6 +264,40 @@ fun HomeScreen(
 
     val touchMarks = remember(scope) { TouchMarks(scope) }
 
+    val toggleFolder: () -> Unit = {
+        panelLetter = null
+        indexGroup = null
+        if (folderOpen) {
+            folderOpen = false
+            folderEditing = false
+        } else {
+            folderOpens++
+            folderOpen = true
+            feel.open()
+        }
+    }
+
+    // One favorite in a list (Classic rows or Ink words), with drag-to-reorder lift.
+    val favoriteItem: @Composable LazyItemScope.(Int, AppEntry) -> Unit = { index, app ->
+        val isDragged = app.key == draggingKey
+        val lift by animateFloatAsState(if (isDragged && dragActive) 1f else 0f, Motion.bouncy, label = "lift")
+        val itemModifier = if (isDragged) {
+            Modifier
+                .zIndex(1f)
+                .graphicsLayer {
+                    translationY = dragOffset
+                    val s = 1f + 0.04f * lift
+                    scaleX = s
+                    scaleY = s
+                }
+                .background(look.panel.copy(alpha = 0.9f * lift), RoundedCornerShape(20.dp))
+        } else {
+            Modifier.animateItem()
+        }
+        CascadeIn(index + 1, resumeTick, itemModifier) { rowFor(app, true) }
+    }
+    val bodyModifier = Modifier.fillMaxSize().alpha(listAlpha).blur(listBlur)
+
     Box(
         Modifier
             .fillMaxSize()
@@ -253,54 +305,105 @@ fun HomeScreen(
             .observeTouches(touchMarks, look.kind)
     ) {
 
-        // Favorites, stacked from the bottom so they sit under your thumb.
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(end = RailWidth)
-                .alpha(listAlpha)
-                .blur(listBlur)
-                .nestedScroll(pullDown),
-            contentPadding = PaddingValues(start = 20.dp, end = 8.dp, top = 24.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.Bottom),
-        ) {
-            if (!isDefaultHome) {
-                item(key = "setup") {
-                    CascadeIn(0, resumeTick) { SetupPill(onOpenSettings) }
+        when (look.kind) {
+            CascadeStyle.Classic -> {
+            // Favorites, stacked from the bottom so they sit under your thumb.
+            LazyColumn(
+                state = listState,
+                modifier = bodyModifier
+                    .padding(end = RailWidth)
+                    .nestedScroll(pullDown),
+                contentPadding = PaddingValues(start = 20.dp, end = 8.dp, top = 24.dp, bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.Bottom),
+            ) {
+                if (!isDefaultHome) {
+                    item(key = "setup") {
+                        CascadeIn(0, resumeTick) { SetupPill(onOpenSettings) }
+                    }
                 }
-            }
-            item(key = "clock") {
-                CascadeIn(0, resumeTick) { ClockHeader(resumeTick, onLongPress = onOpenSettings, onSwitchStyle = onSwitchStyle) }
-            }
-            item(key = "gap") { Spacer(Modifier.height(22.dp)) }
-            if (favorites.isEmpty() && apps.isNotEmpty()) {
-                item(key = "hint") {
-                    Text(
-                        "Slide along the letters on the right, then long-press an app to pin it here.",
-                        style = look.style(15.sp, color = look.subtext),
-                        modifier = Modifier.padding(8.dp),
-                    )
+                item(key = "clock") {
+                    CascadeIn(0, resumeTick) { ClockHeader(resumeTick, onLongPress = onOpenSettings, onSwitchStyle = onSwitchStyle) }
                 }
+                item(key = "gap") { Spacer(Modifier.height(22.dp)) }
+                if (favorites.isEmpty() && apps.isNotEmpty()) {
+                    item(key = "hint") {
+                        Text(
+                            "Slide along the letters on the right, then long-press an app to pin it here.",
+                            style = look.style(15.sp, color = look.subtext),
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    }
+                }
+                itemsIndexed(favorites, key = { _, app -> app.key }) { index, app -> favoriteItem(index, app) }
             }
-            itemsIndexed(favorites, key = { _, app -> app.key }) { index, app ->
-                val isDragged = app.key == draggingKey
-                val lift by animateFloatAsState(if (isDragged && dragActive) 1f else 0f, Motion.bouncy, label = "lift")
-                val itemModifier = if (isDragged) {
-                    // The row being dragged floats above the others and follows the finger.
-                    Modifier
-                        .zIndex(1f)
-                        .graphicsLayer {
-                            translationY = dragOffset
-                            val s = 1f + 0.04f * lift
-                            scaleX = s
-                            scaleY = s
+            }
+
+            // ── Water: the Pool ──
+            CascadeStyle.Water -> PoolHome(
+                favorites = favorites,
+                appsByPackage = appsByPackage,
+                notifications = notifications,
+                launchCounts = launchCounts,
+                favoriteKeys = favoriteKeys,
+                bookmarkKeys = bookmarkKeys,
+                resumeTick = resumeTick,
+                header = {
+                    Column {
+                        TopBar(onSearch = { searchOpen = true }, onBookmarks = toggleFolder, onSettings = onOpenSettings)
+                        if (!isDefaultHome) Box(Modifier.padding(horizontal = 20.dp)) { SetupPill(onOpenSettings) }
+                        Box(Modifier.padding(horizontal = 12.dp)) {
+                            CascadeIn(0, resumeTick) {
+                                ClockHeader(resumeTick, onLongPress = onOpenSettings, onSwitchStyle = onSwitchStyle)
+                            }
                         }
-                        .background(look.panel.copy(alpha = 0.9f * lift), RoundedCornerShape(20.dp))
-                } else {
-                    Modifier.animateItem()
+                    }
+                },
+                onLaunch = launch,
+                onToggleFavorite = vm::toggleFavorite,
+                onToggleBookmark = vm::toggleBookmark,
+                onShortcuts = { shortcutCardFor = it },
+                onPullUp = {
+                    feel.open()
+                    allAppsOpen = true
+                },
+                onPullDown = { HomeUtils.expandNotifications(context) },
+                modifier = bodyModifier,
+            )
+
+            // ── Ink: the Scroll ──
+            CascadeStyle.Ink -> Column(bodyModifier) {
+                TopBar(
+                    onSearch = { searchOpen = true },
+                    onBookmarks = toggleFolder,
+                    onSettings = onOpenSettings,
+                    trailing = { StyleOrb(onSwitch = onSwitchStyle, size = 40.dp) },
+                )
+                if (!isDefaultHome) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { SetupPill(onOpenSettings) }
                 }
-                CascadeIn(index + 1, resumeTick, itemModifier) { rowFor(app, true) }
+                CascadeIn(0, resumeTick) { InkHeader(resumeTick, onLongPress = onOpenSettings) }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(start = TabWidth, end = TabWidth)
+                        .nestedScroll(pullDown),
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.Bottom),
+                ) {
+                    if (favorites.isEmpty() && apps.isNotEmpty()) {
+                        item(key = "hint") {
+                            Text(
+                                "Open a tab on the right edge, then long-press an app to write it onto this page.",
+                                style = look.style(15.sp, color = look.subtext).copy(fontStyle = FontStyle.Italic),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            )
+                        }
+                    }
+                    itemsIndexed(favorites, key = { _, app -> app.key }) { index, app -> favoriteItem(index, app) }
+                }
             }
         }
 
@@ -308,7 +411,7 @@ fun HomeScreen(
         TouchMarksLayer(touchMarks)
 
         // Tap anywhere outside the panel to close it.
-        if (panelOpen || folderOpen) {
+        if (panelOpen || folderOpen || indexGroup != null || shortcutCardFor != null) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -319,6 +422,8 @@ fun HomeScreen(
                         panelLetter = null
                         folderOpen = false
                         folderEditing = false
+                        indexGroup = null
+                        shortcutCardFor = null
                     }
             )
         }
@@ -346,8 +451,13 @@ fun HomeScreen(
             exit = fadeOut(tween(160)) +
                 scaleOut(tween(180), targetScale = 0.9f, transformOrigin = TransformOrigin(1f, 1f)),
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = RailWidth + 10.dp, bottom = 28.dp),
+                .align(if (look.kind == CascadeStyle.Classic) Alignment.BottomEnd else Alignment.TopStart)
+                .padding(
+                    start = if (look.kind == CascadeStyle.Classic) 0.dp else 12.dp,
+                    top = if (look.kind == CascadeStyle.Classic) 0.dp else 52.dp,
+                    end = if (look.kind == CascadeStyle.Classic) RailWidth + 10.dp else 0.dp,
+                    bottom = if (look.kind == CascadeStyle.Classic) 28.dp else 0.dp,
+                ),
         ) {
             BookmarksPanel(
                 apps = bookmarked,
@@ -363,36 +473,79 @@ fun HomeScreen(
             )
         }
 
-        AlphabetRail(
-            letters = letters,
-            active = panelLetter,
-            onLetter = { c ->
-                folderOpen = false
-                folderEditing = false
-                if (c != panelLetter) {
-                    if (panelLetter == null) feel.open()
-                    panelLetter = c
-                    feel.letter(letters.indexOf(c), letters.size)
-                }
-            },
-            onSearch = { searchOpen = true },
-            onSettings = onOpenSettings,
-            onBookmarks = {
-                panelLetter = null
-                if (folderOpen) {
+        if (look.kind == CascadeStyle.Classic) {
+            AlphabetRail(
+                letters = letters,
+                active = panelLetter,
+                onLetter = { c ->
                     folderOpen = false
                     folderEditing = false
-                } else {
-                    folderOpens++
-                    folderOpen = true
-                    feel.open()
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .width(RailWidth)
-                .fillMaxHeight(0.82f),
-        )
+                    if (c != panelLetter) {
+                        if (panelLetter == null) feel.open()
+                        panelLetter = c
+                        feel.letter(letters.indexOf(c), letters.size)
+                    }
+                },
+                onSearch = { searchOpen = true },
+                onSettings = onOpenSettings,
+                onBookmarks = toggleFolder,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(RailWidth)
+                    .fillMaxHeight(0.82f),
+            )
+        }
+
+        // ── Ink: thumb index tabs and their pages ──
+        if (look.kind == CascadeStyle.Ink) {
+            AnimatedVisibility(
+                visible = indexGroup != null,
+                enter = fadeIn(tween(160)) + slideInHorizontally(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)) { it / 3 },
+                exit = fadeOut(tween(160)) + slideOutHorizontally(tween(200)) { it / 4 },
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = TabWidth - 2.dp),
+            ) {
+                var shownGroup by remember { mutableIntStateOf(0) }
+                indexGroup?.let { shownGroup = it }
+                IndexPage(groupIndex = shownGroup, groups = groups, apps = apps, row = { rowFor(it, false) })
+            }
+            ThumbIndex(
+                groups = groups,
+                active = indexGroup,
+                onGroup = { g ->
+                    folderOpen = false
+                    folderEditing = false
+                    if (g != indexGroup) {
+                        if (indexGroup == null) feel.open()
+                        indexGroup = g
+                        feel.letter(g, groups.size)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight(0.72f),
+            )
+        }
+
+        // ── Water: every app, rising from the bottom ──
+        AnimatedVisibility(
+            visible = allAppsOpen,
+            enter = fadeIn(tween(200)) + slideInVertically(spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)) { it / 2 },
+            exit = fadeOut(tween(200)) + slideOutVertically(tween(260)) { it / 2 },
+        ) {
+            AllAppsSheet(apps = apps, row = { rowFor(it, false) }, onClose = { allAppsOpen = false })
+        }
+
+        // Shortcuts for a bubble (Water) as a floating card.
+        AnimatedVisibility(
+            visible = shortcutCardFor != null,
+            enter = fadeIn(Motion.soft) + scaleIn(Motion.bouncy, initialScale = 0.85f),
+            exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.92f),
+            modifier = Modifier.align(Alignment.Center),
+        ) {
+            var shownApp by remember { mutableStateOf<AppEntry?>(null) }
+            shortcutCardFor?.let { shownApp = it }
+            shownApp?.let { ShortcutCard(it, onDone = { shortcutCardFor = null }) }
+        }
 
         AnimatedVisibility(
             visible = searchOpen,

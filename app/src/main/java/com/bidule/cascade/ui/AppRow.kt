@@ -1,6 +1,11 @@
 package com.bidule.cascade.ui
 
 import android.os.Build
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.drawBehind
@@ -108,6 +113,8 @@ fun AppRow(
     shortcutsOpen: Boolean = false,
     onToggleShortcuts: (() -> Unit)? = null,
     drag: DragCallbacks? = null,
+    /** Ink's Scroll layout: a centered word, no icon, notes written underneath like marginalia. */
+    word: Boolean = false,
 ) {
     val look = LocalLook.current
     val context = LocalContext.current
@@ -251,7 +258,7 @@ fun AppRow(
                     translationX = swipeX.value
                 }
                 .clip(RoundedCornerShape(20.dp))
-                .drawBehind { drawPressEffect(look, pressFx, touchPoint, seed) }
+                .drawBehind { drawPressEffect(look, pressFx, touchPoint, seed, word) }
                 .then(gestures)
                 .semantics {
                     onClick(label = "Open ${app.label}") {
@@ -265,7 +272,29 @@ fun AppRow(
                 }
                 .padding(horizontal = 8.dp, vertical = if (big) 10.dp else 8.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            if (word) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        app.label,
+                        style = look.display(30.sp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (notifications.isNotEmpty()) {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            Modifier
+                                .size(9.dp)
+                                .graphicsLayer { rotationZ = 8f }
+                                .background(look.accent, RoundedCornerShape(1.5.dp))
+                        )
+                    }
+                }
+            } else Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
                     app.icon,
                     contentDescription = null,
@@ -290,7 +319,11 @@ fun AppRow(
                 enter = fadeIn(Motion.soft) + expandVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)),
                 exit = fadeOut(Motion.soft) + shrinkVertically(),
             ) {
-                ShortcutList(app, big, onUsed = { onToggleShortcuts?.invoke() })
+                ShortcutList(
+                    app,
+                    indent = if (word) 0.dp else if (big) 56.dp else 48.dp,
+                    onUsed = { onToggleShortcuts?.invoke() },
+                )
             }
             AnimatedVisibility(
                 visible = showNotif,
@@ -298,6 +331,22 @@ fun AppRow(
                 exit = fadeOut(Motion.soft) + shrinkVertically(),
             ) {
                 lastNotif?.let { n ->
+                    if (word) {
+                        Text(
+                            listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(" — "),
+                            style = look.style(14.sp, color = look.subtext).copy(
+                                fontStyle = FontStyle.Italic,
+                                textAlign = TextAlign.Center,
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 2.dp)
+                                .clickable { NotificationService.open(context, n, app) },
+                        )
+                        return@let
+                    }
                     NotificationLine(
                         preview = n,
                         more = (notifications.size - 1).coerceAtLeast(0),
@@ -308,42 +357,66 @@ fun AppRow(
             }
         }
 
-        DropdownMenu(
+        AppMenu(
+            app = app,
             expanded = menuOpen,
-            onDismissRequest = { menuOpen = false },
-            shape = RoundedCornerShape(18.dp),
-        ) {
-            if (onToggleShortcuts != null) {
-                DropdownMenuItem(
-                    text = { Text(if (shortcutsOpen) "Hide shortcuts" else "Shortcuts") },
-                    onClick = { onToggleShortcuts(); menuOpen = false },
-                )
-            }
+            onDismiss = { menuOpen = false },
+            isFavorite = isFavorite,
+            onToggleFavorite = onToggleFavorite,
+            isBookmarked = isBookmarked,
+            onToggleBookmark = onToggleBookmark,
+            shortcutsLabel = if (onToggleShortcuts == null) null else if (shortcutsOpen) "Hide shortcuts" else "Shortcuts",
+            onShortcuts = { onToggleShortcuts?.invoke() },
+        )
+    }
+}
+
+/** The long-press menu, shared by rows, bubbles and words. */
+@Composable
+fun AppMenu(
+    app: AppEntry,
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    isFavorite: Boolean,
+    onToggleFavorite: (String) -> Unit,
+    isBookmarked: Boolean,
+    onToggleBookmark: ((String) -> Unit)?,
+    shortcutsLabel: String?,
+    onShortcuts: () -> Unit,
+) {
+    val context = LocalContext.current
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        if (shortcutsLabel != null) {
+            DropdownMenuItem(text = { Text(shortcutsLabel) }, onClick = { onShortcuts(); onDismiss() })
+        }
+        DropdownMenuItem(
+            text = { Text(if (isFavorite) "Unpin from home" else "Pin to home") },
+            onClick = { onToggleFavorite(app.key); onDismiss() },
+        )
+        if (onToggleBookmark != null) {
             DropdownMenuItem(
-                text = { Text(if (isFavorite) "Unpin from home" else "Pin to home") },
-                onClick = { onToggleFavorite(app.key); menuOpen = false },
-            )
-            if (onToggleBookmark != null) {
-                DropdownMenuItem(
-                    text = { Text(if (isBookmarked) "Remove from bookmarks" else "Add to bookmarks") },
-                    onClick = { onToggleBookmark(app.key); menuOpen = false },
-                )
-            }
-            DropdownMenuItem(
-                text = { Text("App info") },
-                onClick = { AppRepository.openAppInfo(context, app.packageName); menuOpen = false },
-            )
-            DropdownMenuItem(
-                text = { Text("Uninstall") },
-                onClick = { AppRepository.uninstall(context, app.packageName); menuOpen = false },
+                text = { Text(if (isBookmarked) "Remove from bookmarks" else "Add to bookmarks") },
+                onClick = { onToggleBookmark(app.key); onDismiss() },
             )
         }
+        DropdownMenuItem(
+            text = { Text("App info") },
+            onClick = { AppRepository.openAppInfo(context, app.packageName); onDismiss() },
+        )
+        DropdownMenuItem(
+            text = { Text("Uninstall") },
+            onClick = { AppRepository.uninstall(context, app.packageName); onDismiss() },
+        )
     }
 }
 
 /** The app's quick actions, unfolded under the row. */
 @Composable
-private fun ShortcutList(app: AppEntry, big: Boolean, onUsed: () -> Unit) {
+fun ShortcutList(app: AppEntry, indent: Dp, onUsed: () -> Unit) {
     val look = LocalLook.current
     val context = LocalContext.current
     val result by produceState<Shortcuts.Result?>(null, app.packageName) {
@@ -354,7 +427,7 @@ private fun ShortcutList(app: AppEntry, big: Boolean, onUsed: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(start = if (big) 56.dp else 48.dp, top = 8.dp)
+            .padding(start = indent, top = 8.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(look.notifBg)
             .animateContentSize(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow))
@@ -514,8 +587,17 @@ fun CascadeIn(index: Int, trigger: Int, modifier: Modifier = Modifier, content: 
 }
 
 /** The pressed-row effect for each style, drawn behind the row's content. */
-private fun DrawScope.drawPressEffect(look: Look, fx: Float, touch: Offset, seed: Float) {
+private fun DrawScope.drawPressEffect(look: Look, fx: Float, touch: Offset, seed: Float, word: Boolean = false) {
     if (fx <= 0.001f) return
+    if (word) {
+        // A brush underline swept beneath the word.
+        val w = size.width * 0.56f
+        val h = 16.dp.toPx()
+        translate(left = (size.width - w) / 2f, top = size.height - h - 4.dp.toPx()) {
+            drawPath(brushPath(w, h, fx, seed), look.accent.copy(alpha = 0.85f))
+        }
+        return
+    }
     when (look.kind) {
         CascadeStyle.Classic -> drawRect(look.pressed.copy(alpha = look.pressed.alpha * fx))
         CascadeStyle.Water -> {

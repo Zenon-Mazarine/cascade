@@ -62,6 +62,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _haptics = MutableStateFlow(prefs.haptics)
     val haptics: StateFlow<Boolean> = _haptics.asStateFlow()
 
+    private val _launchCounts = MutableStateFlow(prefs.launchCounts)
+    val launchCounts: StateFlow<Map<String, Int>> = _launchCounts.asStateFlow()
+
+    fun recordLaunch(key: String) {
+        val next = _launchCounts.value.toMutableMap()
+        next[key] = (next[key] ?: 0) + 1
+        _launchCounts.value = next
+        prefs.launchCounts = next
+    }
+
     fun setStyle(style: CascadeStyle) {
         _style.value = style
         prefs.style = style.name
