@@ -53,6 +53,38 @@ class Prefs(context: Context) {
             sp.edit().putString(KEY_COUNTS, value.entries.joinToString("|") { "${it.key}=${it.value}" }).apply()
         }
 
+    var proOwned: Boolean
+        get() = sp.getBoolean("pro_owned", false)
+        set(value) {
+            sp.edit().putBoolean("pro_owned", value).apply()
+        }
+
+    var onboarded: Boolean
+        get() = sp.getBoolean("onboarded", false)
+        set(value) {
+            sp.edit().putBoolean("onboarded", value).apply()
+        }
+
+    /** End of the current Pro style preview (epoch millis), 0 when none. */
+    var trialUntil: Long
+        get() = sp.getLong("trial_until", 0L)
+        set(value) {
+            sp.edit().putLong("trial_until", value).apply()
+        }
+
+    /** The free style to fall back to when a preview ends. */
+    var lastFreeStyle: String
+        get() = sp.getString("last_free_style", "Water") ?: "Water"
+        set(value) {
+            sp.edit().putString("last_free_style", value).apply()
+        }
+
+    /** When each Pro style was last previewed, so previews are once a day per style. */
+    fun lastTrialOf(style: String): Long = sp.getLong("trial_$style", 0L)
+    fun markTrial(style: String, at: Long) {
+        sp.edit().putLong("trial_$style", at).apply()
+    }
+
     var style: String
         get() = sp.getString(KEY_STYLE, "Water") ?: "Water"
         set(value) {

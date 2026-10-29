@@ -4,35 +4,65 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// CI passes the run number so every build has a higher versionCode than the last.
+val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+// Screenshot automation only: lets adb pick a style/theme and skips onboarding.
+val screenshotMode = (findProperty("screenshotMode") as String?) == "true"
+
+// The Play upload key comes from CI secrets and is never committed.
+val uploadStore = System.getenv("CASCADE_UPLOAD_STORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+val uploadPassword = System.getenv("CASCADE_UPLOAD_PASSWORD")
+
 android {
     namespace = "com.bidule.cascade"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.bidule.cascade"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 36
+        versionCode = 100 + buildNumber
+        versionName = "1.0.$buildNumber"
+        buildConfigField("boolean", "SCREENSHOT_MODE", screenshotMode.toString())
+        buildConfigField("boolean", "ALL_UNLOCKED", "false")
     }
 
-    // Fixed key kept in this private repo, so every cloud build can update the installed app.
     signingConfigs {
-        create("cascade") {
-            storeFile = file("cascade.keystore")
+        // Public key in this repo, only for the APK you install directly (not Play).
+        create("sideload") {
+            storeFile = file("sideload.keystore")
             storePassword = "cascade123"
             keyAlias = "cascade"
             keyPassword = "cascade123"
         }
+        if (uploadStore != null && uploadPassword != null) {
+            create("upload") {
+                storeFile = uploadStore
+                storePassword = uploadPassword
+                keyAlias = "upload"
+                keyPassword = uploadPassword
+            }
+        }
     }
 
     buildTypes {
+        // What goes to Google Play: shrunk, signed with the upload key.
         release {
-            isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("cascade")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("upload") ?: signingConfigs.getByName("sideload")
+        }
+        // The APK at the GitHub "latest" link: same code, sideload key, everything unlocked
+        // (Play Billing can't run outside the Play Store, and this is the developer's own copy).
+        create("sideload") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("sideload")
+            buildConfigField("boolean", "ALL_UNLOCKED", "true")
+            matchingFallbacks += listOf("release")
         }
         debug {
-            signingConfig = signingConfigs.getByName("cascade")
+            signingConfig = signingConfigs.getByName("sideload")
         }
     }
     compileOptions {
@@ -44,6 +74,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -59,4 +90,5 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
+    implementation("com.android.billingclient:billing:8.3.0")
 }

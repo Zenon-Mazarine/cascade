@@ -27,22 +27,39 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
+      # The Play upload key, if its secrets are set (Settings › Secrets and variables › Actions).
+      - name: Upload key
+        env:
+          KEYSTORE_B64: ${{ secrets.CASCADE_UPLOAD_KEYSTORE }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.keystore"
+            echo "CASCADE_UPLOAD_STORE_FILE=$RUNNER_TEMP/upload.keystore" >> "$GITHUB_ENV"
+            echo "Upload key: present"
+          else
+            echo "Upload key: not set, the Play bundle will be signed with the sideload key"
+          fi
+
       - name: Build
         id: build
+        env:
+          CASCADE_UPLOAD_PASSWORD: ${{ secrets.CASCADE_UPLOAD_PASSWORD }}
         run: |
           set -o pipefail
-          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+          gradle assembleSideload bundleRelease --no-daemon --stacktrace 2>&1 | tee build.log
 
-      # Publishes the APK as the "latest" release: one tap to download on the phone.
-      - name: Publish APK
+      # "latest": the APK to install directly, plus the bundle to upload to Google Play.
+      - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/release/app-release.apk Cascade.apk
+          cp app/build/outputs/apk/sideload/app-sideload.apk Cascade.apk
+          cp app/build/outputs/bundle/release/app-release.aab Cascade-play.aab
+          if [ -n "$CASCADE_UPLOAD_STORE_FILE" ]; then SIGNED="signed with your upload key, ready for Play"; else SIGNED="NOT signed with an upload key yet (add the secrets first)"; fi
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest Cascade.apk \
-            --title "Cascade (latest build)" \
-            --notes "Built from ${GITHUB_SHA::7}. Tap Cascade.apk below to download, then open it to install."
+          gh release create latest Cascade.apk Cascade-play.aab \
+            --title "Cascade (latest build #${GITHUB_RUN_NUMBER})" \
+            --notes "Built from ${GITHUB_SHA::7}. Cascade.apk: install directly on your phone (all styles unlocked). Cascade-play.aab: upload to Google Play Console, $SIGNED."
 
       # Saves the build log to the build-logs branch so errors can be read and fixed.
       - name: Save build report

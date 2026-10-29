@@ -39,6 +39,11 @@ enum class CascadeStyle(val label: String, val blurb: String) {
     Cosmos("Cosmos", "Your apps as a drifting constellation"),
 }
 
+/** Styles that need Cascade Pro. */
+val CascadeStyle.isPro: Boolean
+    get() = this == CascadeStyle.Stone || this == CascadeStyle.Paper ||
+        this == CascadeStyle.Neon || this == CascadeStyle.Cosmos
+
 /** Which home layout a style uses. */
 val CascadeStyle.isField: Boolean
     get() = this == CascadeStyle.Water || this == CascadeStyle.Stone || this == CascadeStyle.Cosmos

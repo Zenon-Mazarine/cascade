@@ -62,13 +62,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.net.Uri
+import com.bidule.cascade.AppInfo
 import com.bidule.cascade.AppRepository
+import com.bidule.cascade.BuildConfig
+import com.bidule.cascade.Pro
 import com.bidule.cascade.HomeUtils
 import com.bidule.cascade.LauncherViewModel
 import com.bidule.cascade.Prefs
 
 @Composable
-fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
+fun SettingsScreen(
+    vm: LauncherViewModel,
+    resumeTick: Int,
+    proOwned: Boolean,
+    onPickStyle: (CascadeStyle) -> Unit,
+    onShowPro: () -> Unit,
+    onBack: () -> Unit,
+) {
     val context = LocalContext.current
     val look = LocalLook.current
     val feel = LocalFeel.current
@@ -158,10 +169,7 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                                     .clip(RoundedCornerShape(16.dp))
                                     .background(bg)
                                     .clickable {
-                                        if (!selected) {
-                                            feel.styleSwitch(st)
-                                            vm.setStyle(st)
-                                        }
+                                        if (!selected) onPickStyle(st)
                                     }
                                     .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -176,6 +184,8 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                                 }
                                 if (selected) {
                                     Icon(Icons.Filled.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
+                                } else if (st.isPro && !proOwned) {
+                                    ProBadge()
                                 }
                             }
                         }
@@ -383,6 +393,61 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                                 Icon(Icons.Filled.Close, contentDescription = "Unpin")
                             }
                         }
+                    }
+                }
+            }
+
+            // ── Cascade Pro ──────────────────────────────────────────────
+            item {
+                Section(title = "Cascade Pro") {
+                    if (proOwned) {
+                        Text(
+                            "Unlocked. Thank you for supporting Cascade! All current and future styles are yours.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    } else {
+                        Text(
+                            "Unlock Stone, Paper, Neon, Cosmos and every future style. One-time purchase, no subscription, no ads.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Button(onClick = onShowPro, modifier = Modifier.fillMaxWidth()) { Text("See Cascade Pro") }
+                    }
+                    TextButton(
+                        onClick = {
+                            Pro.refreshPurchases()
+                            Toast.makeText(context, "Checking your purchases…", Toast.LENGTH_SHORT).show()
+                        },
+                    ) { Text("Restore purchase") }
+                }
+            }
+
+            // ── About ────────────────────────────────────────────────────
+            item {
+                Section(title = "About") {
+                    Text("Cascade ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Cascade works entirely on your phone. It has no account, no ads and no analytics, " +
+                            "and it never sends your apps or notifications anywhere.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                    TextButton(onClick = {
+                        AppRepository.safeStart(
+                            context,
+                            Intent(Intent.ACTION_VIEW, Uri.parse(AppInfo.PRIVACY_URL)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }) { Text("Privacy policy") }
+                    if (AppInfo.SUPPORT_EMAIL.isNotBlank()) {
+                        TextButton(onClick = {
+                            AppRepository.safeStart(
+                                context,
+                                Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${AppInfo.SUPPORT_EMAIL}"))
+                                    .putExtra(Intent.EXTRA_SUBJECT, "Cascade ${BuildConfig.VERSION_NAME}")
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }) { Text("Send feedback") }
                     }
                 }
             }

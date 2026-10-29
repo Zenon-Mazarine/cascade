@@ -24,6 +24,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableLongStateOf
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.geometry.Offset
@@ -43,6 +45,9 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bidule.cascade.ui.CascadeStyle
+import com.bidule.cascade.ui.Onboarding
+import com.bidule.cascade.ui.Paywall
+import com.bidule.cascade.ui.isPro
 import com.bidule.cascade.ui.CascadeTheme
 import com.bidule.cascade.ui.Feel
 import com.bidule.cascade.ui.Haptics
@@ -71,12 +76,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         applyDebugExtras(intent)
         Sounds.init(this)
+        Pro.init(this)
         val haptics = Haptics(this)
         setContent {
             val vm: LauncherViewModel = viewModel()
             val mode by vm.themeMode.collectAsStateWithLifecycle()
             val mono by vm.mono.collectAsStateWithLifecycle()
-            val style by vm.style.collectAsStateWithLifecycle()
+            val chosenStyle by vm.style.collectAsStateWithLifecycle()
+            val proOwned by Pro.owned.collectAsStateWithLifecycle()
+            val trialUntil by vm.trialUntil.collectAsStateWithLifecycle()
+            // A Pro style only shows if it's owned or being previewed; otherwise the last free style.
+            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(trialUntil, resumeTicks.intValue) {
+                while (true) {
+                    now = System.currentTimeMillis()
+                    if (trialUntil <= now) break
+                    delay((trialUntil - now).coerceAtMost(1000L))
+                }
+            }
+            val locked = chosenStyle.isPro && !proOwned && now >= trialUntil
+            val style = if (locked) vm.lastFreeStyle else chosenStyle
             val soundOn by vm.sound.collectAsStateWithLifecycle()
             val hapticsOn by vm.haptics.collectAsStateWithLifecycle()
             val look = remember(mode, mono, style) { lookFor(mode, mono, style) }
@@ -93,7 +112,7 @@ class MainActivity : ComponentActivity() {
 
             CascadeTheme(look) {
                 CompositionLocalProvider(LocalFeel provides feel) {
-                    CascadeApp(vm, homeTicks.intValue, resumeTicks.intValue)
+                    CascadeApp(vm, homeTicks.intValue, resumeTicks.intValue, proOwned, locked, chosenStyle, trialUntil)
                 }
             }
         }
@@ -104,6 +123,7 @@ class MainActivity : ComponentActivity() {
      * adb shell am start -n com.bidule.cascade/.MainActivity --es cascade_style Ink --es cascade_theme Light
      */
     private fun applyDebugExtras(intent: Intent?) {
+        if (!BuildConfig.SCREENSHOT_MODE) return
         val extras = intent?.extras ?: return
         val prefs = Prefs(this)
         extras.getString("cascade_style")?.let { prefs.style = it }
@@ -135,7 +155,15 @@ class MainActivity : ComponentActivity() {
 private enum class Screen { Home, Settings }
 
 @Composable
-private fun CascadeApp(vm: LauncherViewModel, homeTick: Int, resumeTick: Int) {
+private fun CascadeApp(
+    vm: LauncherViewModel,
+    homeTick: Int,
+    resumeTick: Int,
+    proOwned: Boolean,
+    locked: Boolean,
+    chosenStyle: CascadeStyle,
+    trialUntil: Long,
+) {
     var screen by rememberSaveable { mutableStateOf(Screen.Home) }
     LaunchedEffect(homeTick) { if (homeTick > 0) screen = Screen.Home }
 
@@ -146,10 +174,26 @@ private fun CascadeApp(vm: LauncherViewModel, homeTick: Int, resumeTick: Int) {
     val feel = LocalFeel.current
     val scope = rememberCoroutineScope()
     var switching by remember { mutableStateOf<StyleSwitch?>(null) }
+    var paywallFor by remember { mutableStateOf<CascadeStyle?>(null) }
+    var previewEnded by remember { mutableStateOf(false) }
+    var showOnboarding by remember { mutableStateOf(!vm.onboarded && !BuildConfig.SCREENSHOT_MODE) }
+    var lastOrigin by remember { mutableStateOf(Offset.Zero) }
+
+    // A preview just ran out: go back to the free style and say so.
+    LaunchedEffect(locked) {
+        if (locked) {
+            if (trialUntil > 0L) {
+                previewEnded = true
+                paywallFor = chosenStyle
+                vm.endPreview()
+            }
+            vm.setStyle(vm.lastFreeStyle)
+        }
+    }
 
     // One tap: ripple or ink-bloom out from the button, swap style while the screen is covered,
     // then let it drain away to reveal the new look.
-    val onSwitchStyle: (Offset, CascadeStyle) -> Unit = { origin, target ->
+    fun animateTo(origin: Offset, target: CascadeStyle) {
         if (switching == null) {
             feel.styleSwitch(target)
             val sw = StyleSwitch(origin, target)
@@ -160,6 +204,26 @@ private fun CascadeApp(vm: LauncherViewModel, homeTick: Int, resumeTick: Int) {
                 sw.progress.animateTo(1f, tween(560, easing = LinearOutSlowInEasing))
                 switching = null
             }
+        }
+    }
+
+    // Every style change goes through here, so Pro styles are checked in one place.
+    val onSwitchStyle: (Offset, CascadeStyle) -> Unit = { origin, target ->
+        lastOrigin = origin
+        if (target.isPro && !proOwned && System.currentTimeMillis() >= trialUntil) {
+            previewEnded = false
+            paywallFor = target
+        } else {
+            animateTo(origin, target)
+        }
+    }
+
+    // Bought while the paywall was open: close it and switch to the style they wanted.
+    LaunchedEffect(proOwned) {
+        val wanted = paywallFor
+        if (proOwned && wanted != null) {
+            paywallFor = null
+            animateTo(lastOrigin, wanted)
         }
     }
 
@@ -189,11 +253,40 @@ private fun CascadeApp(vm: LauncherViewModel, homeTick: Int, resumeTick: Int) {
                 Screen.Settings -> SettingsScreen(
                     vm = vm,
                     resumeTick = resumeTick,
+                    proOwned = proOwned,
+                    onPickStyle = { st -> onSwitchStyle(Offset.Zero, st) },
+                    onShowPro = { paywallFor = CascadeStyle.Stone; previewEnded = false },
                     onBack = { screen = Screen.Home },
                 )
             }
         }
         StyleSwitchLayer(switching)
+
+        paywallFor?.let { st ->
+            Paywall(
+                style = st,
+                previewEnded = previewEnded,
+                canPreview = vm.canPreview(st),
+                onPreview = {
+                    paywallFor = null
+                    vm.startPreview(st)
+                    animateTo(lastOrigin, st)
+                },
+                onClose = { paywallFor = null },
+            )
+        }
+
+        if (showOnboarding) {
+            Onboarding(
+                currentStyle = look.kind,
+                proOwned = proOwned,
+                onPickStyle = { vm.setStyle(it) },
+                onDone = {
+                    vm.finishOnboarding()
+                    showOnboarding = false
+                },
+            )
+        }
     }
 }
 

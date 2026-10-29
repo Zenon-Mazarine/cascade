@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +57,7 @@ fun StylePickerSheet(
 ) {
     val look = LocalLook.current
     var confirmOriginal by remember { mutableStateOf(false) }
+    val proOwned by com.bidule.cascade.Pro.owned.collectAsState()
 
     Box(
         Modifier
@@ -99,6 +101,7 @@ fun StylePickerSheet(
                     StyleCard(
                         preview = lookFor(look.mode, look.mono, st),
                         selected = st == look.kind,
+                        locked = st.isPro && !proOwned,
                         onClick = { center -> onPick(center, st) },
                     )
                 }
@@ -132,7 +135,7 @@ fun StylePickerSheet(
 }
 
 @Composable
-private fun StyleCard(preview: Look, selected: Boolean, onClick: (Offset) -> Unit) {
+private fun StyleCard(preview: Look, selected: Boolean, locked: Boolean, onClick: (Offset) -> Unit) {
     var center by remember { mutableStateOf(Offset.Zero) }
     val bg = if (preview.background == Color.Transparent) preview.panel.copy(alpha = 1f) else preview.background
     Column(
@@ -150,6 +153,7 @@ private fun StyleCard(preview: Look, selected: Boolean, onClick: (Offset) -> Uni
     ) {
         Box(Modifier.fillMaxWidth().height(86.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.size(62.dp)) { drawOrb(preview) }
+            if (locked) ProBadge(Modifier.align(Alignment.TopEnd))
         }
         Text(
             preview.kind.label,

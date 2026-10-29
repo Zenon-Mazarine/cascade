@@ -15,6 +15,7 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import com.bidule.cascade.ui.CascadeStyle
+import com.bidule.cascade.ui.isPro
 import com.bidule.cascade.ui.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,6 +76,40 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setStyle(style: CascadeStyle) {
         _style.value = style
         prefs.style = style.name
+        if (!style.isPro) prefs.lastFreeStyle = style.name
+    }
+
+    private val _trialUntil = MutableStateFlow(prefs.trialUntil)
+    val trialUntil: StateFlow<Long> = _trialUntil.asStateFlow()
+
+    val lastFreeStyle: CascadeStyle
+        get() = CascadeStyle.entries.firstOrNull { it.name == prefs.lastFreeStyle } ?: CascadeStyle.Water
+
+    fun canPreview(style: CascadeStyle): Boolean =
+        System.currentTimeMillis() - prefs.lastTrialOf(style.name) > PREVIEW_COOLDOWN_MS
+
+    /** Starts a 5-minute preview of a Pro style. */
+    fun startPreview(style: CascadeStyle) {
+        val now = System.currentTimeMillis()
+        prefs.markTrial(style.name, now)
+        _trialUntil.value = now + PREVIEW_MS
+        prefs.trialUntil = now + PREVIEW_MS
+    }
+
+    fun endPreview() {
+        _trialUntil.value = 0L
+        prefs.trialUntil = 0L
+    }
+
+    fun finishOnboarding() {
+        prefs.onboarded = true
+    }
+
+    val onboarded: Boolean get() = prefs.onboarded
+
+    companion object {
+        const val PREVIEW_MS = 5 * 60 * 1000L
+        const val PREVIEW_COOLDOWN_MS = 24 * 60 * 60 * 1000L
     }
 
     fun setSound(enabled: Boolean) {

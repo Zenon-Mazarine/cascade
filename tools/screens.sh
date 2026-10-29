@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -x
 mkdir -p shots
-adb install -r app/build/outputs/apk/release/app-release.apk
+adb install -r app/build/outputs/apk/sideload/app-sideload.apk
 adb shell settings put system screen_off_timeout 600000
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard || true
