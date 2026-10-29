@@ -11,6 +11,9 @@ import android.provider.MediaStore
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
 import com.bidule.cascade.ui.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -100,6 +103,47 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         list.add(to, list.removeAt(from))
         setFavorites(list)
     }
+
+    /** Drag-to-reorder: puts [key] at [index] in the favorites list. */
+    fun moveFavoriteTo(key: String, index: Int) {
+        val list = _favorites.value.toMutableList()
+        val from = list.indexOf(key)
+        if (from < 0 || index !in list.indices || from == index) return
+        list.add(index, list.removeAt(from))
+        setFavorites(list)
+    }
+
+    /** Favorites, bookmarks and look, as a small JSON file. */
+    fun exportBackup(): String = JSONObject().apply {
+        put("app", "cascade")
+        put("version", 1)
+        put("favorites", JSONArray(_favorites.value))
+        put("bookmarks", JSONArray(_bookmarks.value))
+        put("theme", _themeMode.value.name)
+        put("mono", _mono.value)
+    }.toString(2)
+
+    /** Returns false if [text] isn't a Cascade backup. */
+    fun importBackup(text: String): Boolean {
+        val o = try {
+            JSONObject(text)
+        } catch (e: JSONException) {
+            return false
+        }
+        if (o.optString("app") != "cascade") return false
+        o.optJSONArray("favorites")?.let { setFavorites(it.toStringList()) }
+        o.optJSONArray("bookmarks")?.let {
+            val list = it.toStringList()
+            _bookmarks.value = list
+            prefs.bookmarks = list
+        }
+        ThemeMode.entries.firstOrNull { it.name == o.optString("theme") }?.let(::setTheme)
+        if (o.has("mono")) setMono(o.optBoolean("mono"))
+        return true
+    }
+
+    private fun JSONArray.toStringList(): List<String> =
+        (0 until length()).mapNotNull { optString(it).takeIf { s -> s.isNotBlank() } }
 
     private fun setFavorites(list: List<String>) {
         _favorites.value = list

@@ -19,10 +19,11 @@ access. If you ever sideload the APK instead and the toggle is greyed out: App i
 
 ## Using it
 
-- **Favorites**: the list above your thumb. Tap to open, long-press to unpin, reorder,
-  see app info or uninstall. Phone, Messages, Camera and your browser are pinned on first run.
+- **Favorites**: the list above your thumb. Tap to open. Long-press for the menu (unpin, bookmarks, app info, uninstall); keep holding and move your finger to drag the app to a new spot. Phone, Messages, Camera and your browser are pinned on first run.
 - **Alphabet rail** (right edge): slide your thumb along it and the letters bow out in a wave while a panel shows apps for that letter.
   Long-press any app there to pin it.
+- **Shortcuts**: swipe right on any app to unfold its quick actions (needs Cascade to be your home screen).
+- **Backup**: Settings › Backup saves favorites, bookmarks and look to a file; Restore loads it back.
 - **Bookmarks**: the bookmark button on the right edge (just above the gear) opens your folder of hand-picked apps. Tap **Edit** to remove apps or **+** to add them, or long-press any app and choose **Add to bookmarks**.
 - **Search**: magnifier at the top of the rail. Type, then press Go to open the first match.
 - **Notifications**: grant access in settings. The newest notification shows under the app;

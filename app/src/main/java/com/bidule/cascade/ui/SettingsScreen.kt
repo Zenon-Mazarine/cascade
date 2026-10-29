@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import java.time.LocalDate
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -83,6 +84,22 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
     val favoriteKeys by vm.favorites.collectAsStateWithLifecycle()
     val appsByKey = remember(apps) { apps.associateBy { it.key } }
     val favorites = remember(appsByKey, favoriteKeys) { favoriteKeys.mapNotNull { appsByKey[it] } }
+
+    val saveBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val ok = runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { it.write(vm.exportBackup().toByteArray()) } != null
+        }.getOrDefault(false)
+        Toast.makeText(context, if (ok) "Backup saved" else "Couldn't save the backup", Toast.LENGTH_SHORT).show()
+    }
+    val loadBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        val ok = text != null && vm.importBackup(text)
+        Toast.makeText(context, if (ok) "Setup restored" else "That file isn't a Cascade backup", Toast.LENGTH_SHORT).show()
+    }
 
     val roleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         roleTick++
@@ -253,6 +270,28 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                             },
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("Allow notification access") }
+                    }
+                }
+            }
+
+            // ── Backup ───────────────────────────────────────────────────
+            item {
+                Section(title = "Backup") {
+                    Text(
+                        "Save your favorites, bookmarks and look to a file (on the phone or in Google Drive), " +
+                            "and restore them after a reinstall or on a new phone.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(
+                            onClick = { saveBackup.launch("cascade-backup-${LocalDate.now()}.json") },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Back up") }
+                        OutlinedButton(
+                            onClick = { loadBackup.launch(arrayOf("application/json", "application/octet-stream", "text/plain")) },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Restore") }
                     }
                 }
             }

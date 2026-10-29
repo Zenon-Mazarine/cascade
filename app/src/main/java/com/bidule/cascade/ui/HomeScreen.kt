@@ -58,6 +58,14 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.animation.core.animate
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
@@ -116,6 +124,16 @@ fun HomeScreen(
     var folderEditing by remember { mutableStateOf(false) }
     var folderOpens by remember { mutableIntStateOf(0) }
     var pickerOpen by remember { mutableStateOf(false) }
+    /** Which row has its shortcuts unfolded: "fav:<key>" or "list:<key>". */
+    var shortcutsFor by remember { mutableStateOf<String?>(null) }
+
+    // Drag-to-reorder state for the favorites list.
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var draggingKey by remember { mutableStateOf<String?>(null) }
+    var dragActive by remember { mutableStateOf(false) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val latestFavoriteKeys by rememberUpdatedState(favoriteKeys)
 
     fun closeAll() {
         panelLetter = null
@@ -123,7 +141,42 @@ fun HomeScreen(
         folderOpen = false
         folderEditing = false
         pickerOpen = false
+        shortcutsFor = null
     }
+
+    fun dragCallbacks(key: String) = DragCallbacks(
+        onStart = {
+            shortcutsFor = null
+            draggingKey = key
+            dragActive = true
+            dragOffset = 0f
+        },
+        onDrag = onDrag@{ dy ->
+            if (draggingKey != key) return@onDrag
+            dragOffset += dy
+            val items = listState.layoutInfo.visibleItemsInfo
+            val current = items.firstOrNull { it.key == key } ?: return@onDrag
+            val center = current.offset + dragOffset + current.size / 2f
+            val target = items.firstOrNull {
+                it.key != key && it.key in latestFavoriteKeys &&
+                    center > it.offset && center < it.offset + it.size
+            } ?: return@onDrag
+            val toIndex = latestFavoriteKeys.indexOf(target.key as String)
+            vm.moveFavoriteTo(key, toIndex)
+            // Keep the dragged row under the finger now that its slot moved.
+            dragOffset += current.offset - target.offset
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        },
+        onEnd = {
+            dragActive = false
+            scope.launch {
+                animate(dragOffset, 0f, animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) { v, _ ->
+                    dragOffset = v
+                }
+                if (!dragActive) draggingKey = null
+            }
+        },
+    )
 
     // Pressing Home while already home closes whatever is open.
     LaunchedEffect(homeTick) { closeAll() }
@@ -141,6 +194,7 @@ fun HomeScreen(
         AppRepository.launch(context, app)
     }
     val rowFor: @Composable (AppEntry, Boolean) -> Unit = { app, big ->
+        val shortcutId = (if (big) "fav:" else "list:") + app.key
         AppRow(
             app = app,
             isFavorite = app.key in favoriteKeys,
@@ -148,7 +202,9 @@ fun HomeScreen(
             big = big,
             onLaunch = launch,
             onToggleFavorite = vm::toggleFavorite,
-            onMove = vm::moveFavorite,
+            shortcutsOpen = shortcutsFor == shortcutId,
+            onToggleShortcuts = { shortcutsFor = if (shortcutsFor == shortcutId) null else shortcutId },
+            drag = if (big) dragCallbacks(app.key) else null,
             isBookmarked = app.key in bookmarkKeys,
             onToggleBookmark = vm::toggleBookmark,
         )
@@ -190,6 +246,7 @@ fun HomeScreen(
 
         // Favorites, stacked from the bottom so they sit under your thumb.
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(end = RailWidth)
@@ -218,7 +275,23 @@ fun HomeScreen(
                 }
             }
             itemsIndexed(favorites, key = { _, app -> app.key }) { index, app ->
-                CascadeIn(index + 1, resumeTick, Modifier.animateItem()) { rowFor(app, true) }
+                val isDragged = app.key == draggingKey
+                val lift by animateFloatAsState(if (isDragged && dragActive) 1f else 0f, Motion.bouncy, label = "lift")
+                val itemModifier = if (isDragged) {
+                    // The row being dragged floats above the others and follows the finger.
+                    Modifier
+                        .zIndex(1f)
+                        .graphicsLayer {
+                            translationY = dragOffset
+                            val s = 1f + 0.04f * lift
+                            scaleX = s
+                            scaleY = s
+                        }
+                        .background(look.panel.copy(alpha = 0.9f * lift), RoundedCornerShape(20.dp))
+                } else {
+                    Modifier.animateItem()
+                }
+                CascadeIn(index + 1, resumeTick, itemModifier) { rowFor(app, true) }
             }
         }
 
