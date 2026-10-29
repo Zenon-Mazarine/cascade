@@ -199,10 +199,36 @@ def word_reveal(canvas, words, fnt, cx, cy, t, start, stagger=0.07, dur=0.45, fi
 
 
 # ── clips ─────────────────────────────────────────────────────────────
+def draw_status(img):
+    """Frame captures don't include Android's status bar: draw a tidy one (9:41, full signal),
+    with icon color picked from the brightness under it."""
+    d = ImageDraw.Draw(img)
+    w = img.width
+    k = w / 660
+    top = np.asarray(img.crop((0, 0, w, int(44 * k)))).mean()
+    c = (20, 20, 24) if top > 150 else (245, 245, 248)
+    d.text((34 * k, 14 * k), "9:41", font=font("text", int(23 * k)), fill=c)
+    x = w - 34 * k
+    # Battery.
+    d.rounded_rectangle([x - 30 * k, 17 * k, x, 33 * k], radius=4 * k, outline=c, width=max(1, int(2 * k)))
+    d.rectangle([x - 27 * k, 20 * k, x - 3 * k, 30 * k], fill=c)
+    # Signal bars.
+    x -= 44 * k
+    for i in range(4):
+        hh = (5 + i * 4) * k
+        d.rectangle([x + i * 6 * k, 33 * k - hh, x + i * 6 * k + 3.5 * k, 33 * k], fill=c)
+    # Wi-Fi.
+    x -= 30 * k
+    for i, r in enumerate([14, 9.5, 5]):
+        d.pieslice([x - r * k, 33 * k - 2 * r * k, x + r * k, 33 * k], 225, 315, fill=c if i == 2 else None, outline=c, width=max(1, int(2.2 * k)))
+    return img
+
+
 class Clip:
     """Frames of a recording, resampled to 30 fps and scaled to the phone screen size."""
 
-    def __init__(self, path, start=0.0, dur=None, size=(SCREEN_W, SCREEN_H)):
+    def __init__(self, path, start=0.0, dur=None, size=(SCREEN_W, SCREEN_H), status=True):
+        self.status = status
         args = ["ffmpeg", "-v", "error", "-ss", f"{start}", "-i", path]
         if dur:
             args += ["-t", f"{dur}"]
@@ -214,7 +240,8 @@ class Clip:
 
     def at(self, i):
         i = int(clamp(i, 0, self.n - 1))
-        return Image.fromarray(self.frames[i])
+        img = Image.fromarray(self.frames[i].copy())
+        return draw_status(img) if self.status else img
 
 
 # ── encoder ───────────────────────────────────────────────────────────

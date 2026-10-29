@@ -39,7 +39,7 @@ TOTAL = 20.5
 
 BRAND_TOP, BRAND_BOT = (14, 90, 115), (59, 42, 107)
 PHONE_CY = 1150
-SWITCH_AT = 0.85  # where the transition starts inside each cut
+SWITCH_AT = 0.55  # where the transition starts inside each cut (the capture puts it 0.6 s in)
 
 
 def still(key):
@@ -65,7 +65,7 @@ def load_clip(name, start, dur):
 # Each style segment is cut from the real recording of its switch.
 CUTS = {}
 for key, *_ in STYLES:
-    CUTS[key] = load_clip(f"switch-{PREV[key]}-{key}", float(os.environ.get("CUT_IN", "0.0")), SEG + 0.4)
+    CUTS[key] = load_clip(f"switch-{PREV[key]}-{key}", 0.6 - SWITCH_AT, SEG + 0.3)
 MEET = load_clip("idle-water", 0.0, 2.0)
 
 ICON = Image.open(os.path.join(os.path.dirname(__file__), "..", "..", "store", "graphics", "icon-512.png")).convert("RGB")
@@ -124,11 +124,14 @@ def tap_ring(canvas, cx, cy, p, color):
     d.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], fill=color + (int(160 * (1 - p)),))
 
 
-def orb_point(scale, cx, cy):
-    """Where the style button sits on the phone screen, in canvas coordinates."""
-    # In the recordings the orb is ~36dp from the right edge, ~150dp down (2.625 px/dp at 1080 wide).
-    sx = (SCREEN_W - 36 * 2.625 * SCREEN_W / 1080)
-    sy = 150 * 2.625 * SCREEN_W / 1080
+ORB = {"classic": (881, 627), "water": (972, 457), "ink": (871, 189), "stone": (967, 457),
+       "paper": (969, 450), "neon": (864, 185), "cosmos": (963, 454)}
+
+
+def orb_point(scale, cx, cy, key):
+    """Where the style button sits on the phone screen (measured at 1080 wide), in canvas coordinates."""
+    sx = ORB[key][0] * SCREEN_W / 1080
+    sy = ORB[key][1] * SCREEN_W / 1080
     w = (PHONE_W + 2 * SHADOW_PAD) * scale
     h = (PHONE_H + 2 * SHADOW_PAD) * scale
     x0 = cx - w / 2 + (SHADOW_PAD + BEZEL) * scale
@@ -182,7 +185,7 @@ def frame(t):
         scale = 1.0 + 0.03 * run
         place_center(canvas, phone(screen_for(st[0], lt), scale), W / 2, PHONE_CY)
         # A tap on the style button just before each switch.
-        ox, oy = orb_point(scale, W / 2, PHONE_CY)
+        ox, oy = orb_point(scale, W / 2, PHONE_CY, PREV[st[0]])
         light = sum(prev[5]) > 400
         tap_ring(canvas, ox, oy, seg(lt, SWITCH_AT - 0.35, SWITCH_AT + 0.35), (40, 40, 48) if light else (255, 255, 255))
         # Titles: the previous style's leaves, this one's lands with the switch.

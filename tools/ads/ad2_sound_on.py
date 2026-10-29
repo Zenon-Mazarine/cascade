@@ -21,10 +21,11 @@ os.makedirs(OUT, exist_ok=True)
 
 T_INK, T_WATER, T_END, TOTAL = 1.6, 6.4, 10.4, 13.0
 # In the recordings the swipe starts 0.6 s in. Ink: 2.6 s down the tabs. Water: pull at 2.1 s.
-INK_IN, WATER_IN = 0.2, 1.0
-INK_SWIPE = (0.6, 3.2)
-TABS = 8
-PULL = (2.1, 2.8)
+INK_IN, WATER_IN = 0.0, 0.0
+# Frame capture timings: the thumb goes down on the tabs at 0.33 s and slides to 2.67 s,
+# crossing into four tabs (F–G, M–P, S–T, V–Y on the test phone) at these moments.
+TAB_HITS = [(0.36, 0.36, 1.5), (1.01, 0.50, 1.124), (1.77, 0.65, 0.842), (2.53, 0.79, 0.75)]  # (time, y fraction, pitch)
+PULL = (0.5, 1.13)
 
 
 def clip(name, start, dur, fallback):
@@ -102,13 +103,10 @@ def frame(t):
                  alpha=ease_out(seg(lt, 0.5, 0.9)))
         # Notes: one per tab the thumb crosses.
         scr_x0 = cx - SCREEN_W / 2
-        a, b = INK_SWIPE[0] + INK_IN - 0.0, INK_SWIPE[1] + INK_IN
-        names = ["♪", "♫", "♪", "♩", "♫", "♪", "♩", "♫"]
+        names = ["♪", "♫", "♩", "♪"]
         top = 1180 - SCREEN_H / 2
-        for k in range(TABS):
-            hit = (a - INK_IN) + (k + 0.5) / TABS * (b - a)
-            y = top + SCREEN_H * (0.30 + (k + 0.5) / TABS * 0.45)
-            note_burst(canvas, scr_x0 + SCREEN_W - 10, y, lt - hit, SEAL, names[k])
+        for k, (hit, yf, _) in enumerate(TAB_HITS):
+            note_burst(canvas, scr_x0 + SCREEN_W - 10, top + SCREEN_H * yf, lt - hit, SEAL, names[k])
         out = ease_in_out(seg(lt, T_WATER - T_INK - 0.35, T_WATER - T_INK))
         if out:
             canvas.alpha_composite(Image.new("RGBA", (W, H), (8, 52, 68, int(255 * out))))
@@ -161,11 +159,8 @@ def render():
     tr.sfx("classic_tick", 0.3, 0.6)
     tr.sfx("cosmos_chime", 0.45, 0.4)
     # Ink: the actual tab notes, high to low (Hirajoshi), on each tab crossing.
-    hira = [1.784, 1.684, 1.5, 1.191, 1.124, 0.892, 0.842, 0.75]
-    a, b = INK_SWIPE
-    for k in range(TABS):
-        at = T_INK + (a - INK_IN) + (k + 0.5) / TABS * (b - a)
-        tr.sfx("ink_pluck", at, 0.7, pan=0.25, rate=hira[k])
+    for hit, _, pitch in TAB_HITS:
+        tr.sfx("ink_pluck", T_INK + hit, 0.75, pan=0.25, rate=pitch)
     tr.sfx("ink_brush", T_INK + 0.15, 0.5)
     # Water: soft open, a run of bubbles while the water rises.
     tr.sfx("water_soft", T_WATER + PULL[0] - WATER_IN, 0.7)
