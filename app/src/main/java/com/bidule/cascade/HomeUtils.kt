@@ -1,5 +1,6 @@
 package com.bidule.cascade
 
+import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -79,5 +80,18 @@ object HomeUtils {
             context,
             homeIntent().setPackage(packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
+    }
+
+    /** Pulls down the notification shade, like swiping down on most home screens. */
+    @SuppressLint("WrongConstant")
+    fun expandNotifications(context: Context) {
+        try {
+            val statusBar = context.getSystemService("statusbar") ?: return
+            Class.forName("android.app.StatusBarManager")
+                .getMethod("expandNotificationsPanel")
+                .invoke(statusBar)
+        } catch (e: Throwable) {
+            // Some phones block this; swiping down just does nothing there.
+        }
     }
 }

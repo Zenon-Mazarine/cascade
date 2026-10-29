@@ -20,7 +20,21 @@ class Prefs(context: Context) {
             sp.edit().putString(KEY_PREVIOUS_HOME, value).apply()
         }
 
+    var theme: String
+        get() = sp.getString(KEY_THEME, "Wallpaper") ?: "Wallpaper"
+        set(value) {
+            sp.edit().putString(KEY_THEME, value).apply()
+        }
+
+    var mono: Boolean
+        get() = sp.getBoolean(KEY_MONO, false)
+        set(value) {
+            sp.edit().putBoolean(KEY_MONO, value).apply()
+        }
+
     private companion object {
+        const val KEY_THEME = "theme"
+        const val KEY_MONO = "mono"
         const val KEY_FAVORITES = "favorites"
         const val KEY_PREVIOUS_HOME = "previous_home"
     }

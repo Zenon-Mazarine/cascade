@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.bidule.cascade.ui.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,24 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private val _favorites = MutableStateFlow(prefs.favorites.orEmpty())
     val favorites: StateFlow<List<String>> = _favorites.asStateFlow()
+
+    private val _themeMode = MutableStateFlow(
+        ThemeMode.entries.firstOrNull { it.name == prefs.theme } ?: ThemeMode.Wallpaper
+    )
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    private val _mono = MutableStateFlow(prefs.mono)
+    val mono: StateFlow<Boolean> = _mono.asStateFlow()
+
+    fun setTheme(mode: ThemeMode) {
+        _themeMode.value = mode
+        prefs.theme = mode.name
+    }
+
+    fun setMono(enabled: Boolean) {
+        _mono.value = enabled
+        prefs.mono = enabled
+    }
 
     /** Reloads the app list whenever something is installed, removed or updated. */
     private val packageReceiver = object : BroadcastReceiver() {

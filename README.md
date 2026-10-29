@@ -21,11 +21,13 @@ access. If you ever sideload the APK instead and the toggle is greyed out: App i
 
 - **Favorites**: the list above your thumb. Tap to open, long-press to unpin, reorder,
   see app info or uninstall. Phone, Messages, Camera and your browser are pinned on first run.
-- **Alphabet rail** (right edge): touch or slide along it, and a panel shows apps for that letter.
+- **Alphabet rail** (right edge): slide your thumb along it and the letters bow out in a wave while a panel shows apps for that letter.
   Long-press any app there to pin it.
 - **Search**: magnifier at the top of the rail. Type, then press Go to open the first match.
 - **Notifications**: grant access in settings. The newest notification shows under the app;
   tap to open it, ✕ to dismiss.
+- **Look**: in settings, pick Wallpaper, Dark or Light, and turn on **Black & white** for grayscale icons with no color accents.
+- **Swipe down** anywhere on the home screen to pull down notifications.
 - **Clock**: tap for alarms, long-press for settings. Settings is also the gear at the bottom of the rail.
 
 ## Going back to your old home screen

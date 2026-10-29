@@ -1,8 +1,9 @@
 package com.bidule.cascade.ui
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
@@ -14,21 +15,27 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.exp
 
 /**
- * The letter strip on the right edge. Touch or slide your thumb along it and [onLetter]
- * fires for the letter under your finger. Search sits on top, settings at the bottom.
+ * The letter strip on the right edge. Slide your thumb along it and the letters near your
+ * finger swell and bow outward in a wave; [onLetter] fires for the letter under the finger.
+ * On release the wave springs back flat. Search sits on top, settings at the bottom.
  */
 @Composable
 fun AlphabetRail(
@@ -39,16 +46,23 @@ fun AlphabetRail(
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val look = LocalLook.current
     val currentOnLetter by rememberUpdatedState(onLetter)
+    val density = LocalDensity.current
+    val bulgePx = with(density) { 54.dp.toPx() }
+    val sigmaPx = with(density) { 46.dp.toPx() }
+
     var heightPx by remember { mutableIntStateOf(1) }
-    val iconTint = Color.White.copy(alpha = 0.85f)
+    var fingerY by remember { mutableFloatStateOf(-10_000f) }
+    var touching by remember { mutableStateOf(false) }
+    val wave by animateFloatAsState(if (touching) 1f else 0f, Motion.bouncy, label = "wave")
 
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         IconButton(onClick = onSearch, modifier = Modifier.size(RailWidth)) {
-            Icon(Icons.Filled.Search, contentDescription = "Search apps", tint = iconTint)
+            Icon(Icons.Filled.Search, contentDescription = "Search apps", tint = look.text.copy(alpha = 0.85f))
         }
 
-        Column(
+        Box(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
@@ -62,34 +76,54 @@ fun AlphabetRail(
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         down.consume()
-                        currentOnLetter(letterAt(down.position.y))
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            currentOnLetter(letterAt(change.position.y))
-                            change.consume()
+                        touching = true
+                        fingerY = down.position.y
+                        currentOnLetter(letterAt(fingerY))
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+                                fingerY = change.position.y
+                                currentOnLetter(letterAt(fingerY))
+                                change.consume()
+                            }
+                        } finally {
+                            touching = false
                         }
                     }
                 },
-            verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            letters.forEach { c ->
+            val count = letters.size.coerceAtLeast(1)
+            letters.forEachIndexed { i, c ->
                 val isActive = c == active
                 Text(
                     c.toString(),
-                    style = if (isActive) {
-                        OnWallpaper.letter.copy(color = Accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    } else {
-                        OnWallpaper.letter
-                    },
+                    style = look.style(
+                        size = 12.sp,
+                        weight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isActive) look.accent else look.text.copy(alpha = 0.8f),
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .graphicsLayer {
+                            // Lay letters out evenly, then push the ones near the finger outward.
+                            val slot = heightPx.toFloat() / count
+                            val centerY = slot * (i + 0.5f)
+                            val d = centerY - fingerY
+                            val g = exp(-(d * d) / (2f * sigmaPx * sigmaPx)) * wave
+                            translationY = centerY - size.height / 2f
+                            translationX = -bulgePx * g
+                            val s = 1f + 0.9f * g
+                            scaleX = s
+                            scaleY = s
+                        },
                 )
             }
         }
 
         IconButton(onClick = onSettings, modifier = Modifier.size(RailWidth)) {
-            Icon(Icons.Filled.Settings, contentDescription = "Cascade settings", tint = iconTint)
+            Icon(Icons.Filled.Settings, contentDescription = "Cascade settings", tint = look.text.copy(alpha = 0.85f))
         }
     }
 }

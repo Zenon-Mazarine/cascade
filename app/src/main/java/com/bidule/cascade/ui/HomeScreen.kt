@@ -4,12 +4,21 @@ import android.content.Intent
 import android.provider.AlarmClock
 import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,10 +41,10 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,14 +59,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -80,6 +96,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
+    val look = LocalLook.current
 
     val apps by vm.apps.collectAsStateWithLifecycle()
     val favoriteKeys by vm.favorites.collectAsStateWithLifecycle()
@@ -121,33 +138,75 @@ fun HomeScreen(
         )
     }
 
-    val listAlpha by animateFloatAsState(if (panelLetter != null) 0.2f else 1f, label = "dim")
+    // Swipe down on the home screen to open the notification shade.
+    val pullThreshold = with(LocalDensity.current) { 90.dp.toPx() }
+    val pullDown = remember {
+        object : NestedScrollConnection {
+            var pulled = 0f
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && available.y > 0f) {
+                    pulled += available.y
+                    if (pulled > pullThreshold) {
+                        pulled = Float.NEGATIVE_INFINITY // once per gesture
+                        HomeUtils.expandNotifications(context)
+                    }
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                pulled = 0f
+                return Velocity.Zero
+            }
+        }
+    }
+
+    val panelOpen = panelLetter != null
+    val listAlpha by animateFloatAsState(if (panelOpen || searchOpen) 0.25f else 1f, Motion.soft, label = "dim")
+    val listBlur by animateDpAsState(
+        if (panelOpen || searchOpen) 14.dp else 0.dp,
+        spring(stiffness = Spring.StiffnessMediumLow),
+        label = "blur",
+    )
 
     Box(Modifier.fillMaxSize().systemBarsPadding()) {
 
         // Favorites, stacked from the bottom so they sit under your thumb.
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(end = RailWidth).alpha(listAlpha),
-            contentPadding = PaddingValues(start = 22.dp, end = 8.dp, top = 24.dp, bottom = 28.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = RailWidth)
+                .alpha(listAlpha)
+                .blur(listBlur)
+                .nestedScroll(pullDown),
+            contentPadding = PaddingValues(start = 20.dp, end = 8.dp, top = 24.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.Bottom),
         ) {
-            if (!isDefaultHome) item(key = "setup") { SetupPill(onOpenSettings) }
-            item(key = "clock") { ClockHeader(resumeTick, onLongPress = onOpenSettings) }
-            item(key = "gap") { Spacer(Modifier.height(18.dp)) }
+            if (!isDefaultHome) {
+                item(key = "setup") {
+                    CascadeIn(0, resumeTick) { SetupPill(onOpenSettings) }
+                }
+            }
+            item(key = "clock") {
+                CascadeIn(0, resumeTick) { ClockHeader(resumeTick, onLongPress = onOpenSettings) }
+            }
+            item(key = "gap") { Spacer(Modifier.height(22.dp)) }
             if (favorites.isEmpty() && apps.isNotEmpty()) {
                 item(key = "hint") {
                     Text(
                         "Slide along the letters on the right, then long-press an app to pin it here.",
-                        style = OnWallpaper.hint,
-                        modifier = Modifier.padding(6.dp),
+                        style = look.style(15.sp, color = look.subtext),
+                        modifier = Modifier.padding(8.dp),
                     )
                 }
             }
-            items(favorites, key = { it.key }) { app -> rowFor(app, true) }
+            itemsIndexed(favorites, key = { _, app -> app.key }) { index, app ->
+                CascadeIn(index + 1, resumeTick, Modifier.animateItem()) { rowFor(app, true) }
+            }
         }
 
         // Tap anywhere outside the panel to close it.
-        if (panelLetter != null) {
+        if (panelOpen) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -159,21 +218,19 @@ fun HomeScreen(
         }
 
         AnimatedVisibility(
-            visible = panelLetter != null,
-            enter = fadeIn() + slideInHorizontally { it / 4 },
-            exit = fadeOut() + slideOutHorizontally { it / 4 },
+            visible = panelOpen,
+            enter = fadeIn(Motion.soft) +
+                scaleIn(Motion.bouncy, initialScale = 0.82f, transformOrigin = TransformOrigin(1f, 1f)),
+            exit = fadeOut(tween(160)) +
+                scaleOut(tween(180), targetScale = 0.9f, transformOrigin = TransformOrigin(1f, 1f)),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = RailWidth + 6.dp, bottom = 28.dp),
+                .padding(end = RailWidth + 10.dp, bottom = 28.dp),
         ) {
             // Keep showing the last letter while the panel animates out.
             var shown by remember { mutableStateOf('A') }
             panelLetter?.let { shown = it }
-            LetterPanel(
-                letter = shown,
-                apps = apps.filter { it.letter == shown },
-                row = { rowFor(it, false) },
-            )
+            LetterPanel(letter = shown, apps = apps, row = { rowFor(it, false) })
         }
 
         AlphabetRail(
@@ -193,7 +250,11 @@ fun HomeScreen(
                 .fillMaxHeight(0.82f),
         )
 
-        if (searchOpen) {
+        AnimatedVisibility(
+            visible = searchOpen,
+            enter = fadeIn(Motion.soft) + slideInVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) { it / 6 },
+            exit = fadeOut(tween(150)) + slideOutVertically(tween(200)) { it / 8 },
+        ) {
             SearchOverlay(apps = apps, onLaunch = launch, onClose = { searchOpen = false }, row = { rowFor(it, false) })
         }
     }
@@ -201,22 +262,36 @@ fun HomeScreen(
 
 @Composable
 private fun LetterPanel(letter: Char, apps: List<AppEntry>, row: @Composable (AppEntry) -> Unit) {
+    val look = LocalLook.current
     Surface(
-        modifier = Modifier.width(300.dp).heightIn(max = 460.dp),
-        shape = RoundedCornerShape(26.dp),
-        color = PanelColor,
-        shadowElevation = 12.dp,
+        modifier = Modifier.width(300.dp).heightIn(max = 470.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = look.panel,
+        shadowElevation = 16.dp,
     ) {
-        Column(Modifier.padding(vertical = 14.dp)) {
-            Text(
-                letter.toString(),
-                color = Accent,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-            LazyColumn(contentPadding = PaddingValues(horizontal = 10.dp)) {
-                items(apps, key = { it.key }) { row(it) }
+        // Sliding between letters: forward slides up, backward slides down; the panel resizes smoothly.
+        AnimatedContent(
+            targetState = letter,
+            transitionSpec = {
+                val forward = targetState > initialState
+                (slideInVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMedium)) { h -> if (forward) h / 6 else -h / 6 } +
+                    fadeIn(tween(180))) togetherWith
+                    (slideOutVertically(tween(160)) { h -> if (forward) -h / 8 else h / 8 } + fadeOut(tween(120))) using
+                    SizeTransform(clip = false) { _, _ -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow) }
+            },
+            label = "letter",
+        ) { l ->
+            Column(Modifier.padding(vertical = 16.dp)) {
+                Text(
+                    l.toString(),
+                    style = look.style(30.sp, FontWeight.Bold, look.accent).copy(shadow = null),
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 2.dp),
+                )
+                LazyColumn(contentPadding = PaddingValues(horizontal = 10.dp)) {
+                    itemsIndexed(apps.filter { it.letter == l }, key = { _, a -> a.key }) { i, app ->
+                        CascadeIn(i, l.code) { row(app) }
+                    }
+                }
             }
         }
     }
@@ -226,6 +301,7 @@ private fun LetterPanel(letter: Char, apps: List<AppEntry>, row: @Composable (Ap
 @Composable
 private fun ClockHeader(resumeTick: Int, onLongPress: () -> Unit) {
     val context = LocalContext.current
+    val look = LocalLook.current
     // Re-keyed on resume because coroutine delays pause while the phone sleeps.
     val now by produceState(LocalDateTime.now(), resumeTick) {
         while (true) {
@@ -252,25 +328,35 @@ private fun ClockHeader(resumeTick: Int, onLongPress: () -> Unit) {
                     )
                 },
             )
-            .padding(horizontal = 6.dp)
+            .padding(horizontal = 8.dp)
     ) {
-        Text(time, style = OnWallpaper.clock)
-        Text(date, style = OnWallpaper.date)
+        AnimatedContent(
+            targetState = time,
+            transitionSpec = {
+                (slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { it / 2 } + fadeIn()) togetherWith
+                    (slideOutVertically(spring(stiffness = Spring.StiffnessMediumLow)) { -it / 2 } + fadeOut())
+            },
+            label = "clock",
+        ) { t ->
+            Text(t, style = look.style(70.sp, FontWeight.Light))
+        }
+        Text(date, style = look.style(17.sp, color = look.subtext))
     }
 }
 
 @Composable
 private fun SetupPill(onClick: () -> Unit) {
+    val look = LocalLook.current
     Row(
         Modifier
-            .padding(bottom = 12.dp)
-            .background(Color(0x99000000), RoundedCornerShape(50))
+            .padding(bottom = 14.dp)
+            .background(look.notifBg, RoundedCornerShape(50))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Preview mode · ", style = OnWallpaper.notifText)
-        Text("Set up", style = OnWallpaper.notifTitle.copy(color = Accent))
+        Text("Preview mode · ", style = look.style(13.sp, color = look.subtext))
+        Text("Set up", style = look.style(13.sp, FontWeight.SemiBold, look.accent))
     }
 }
 
@@ -281,6 +367,7 @@ private fun SearchOverlay(
     onClose: () -> Unit,
     row: @Composable (AppEntry) -> Unit,
 ) {
+    val look = LocalLook.current
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
     val results = remember(query, apps) {
@@ -293,7 +380,7 @@ private fun SearchOverlay(
     Box(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
+            .background(look.overlay)
             .imePadding()
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -303,6 +390,7 @@ private fun SearchOverlay(
                     onValueChange = { query = it },
                     placeholder = { Text("Search apps") },
                     singleLine = true,
+                    shape = RoundedCornerShape(18.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { results.firstOrNull()?.let(onLaunch) }),
                     modifier = Modifier.weight(1f).focusRequester(focus),
@@ -311,7 +399,9 @@ private fun SearchOverlay(
             }
             Spacer(Modifier.height(8.dp))
             LazyColumn(Modifier.weight(1f)) {
-                items(results, key = { it.key }) { row(it) }
+                items(results, key = { it.key }) { app ->
+                    Box(Modifier.animateItem()) { row(app) }
+                }
             }
         }
     }

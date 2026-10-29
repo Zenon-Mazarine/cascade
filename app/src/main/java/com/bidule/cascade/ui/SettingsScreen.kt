@@ -9,6 +9,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.Switch
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -61,6 +68,7 @@ import com.bidule.cascade.Prefs
 @Composable
 fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
     val context = LocalContext.current
+    val look = LocalLook.current
     BackHandler(onBack = onBack)
 
     var roleTick by remember { mutableIntStateOf(0) }
@@ -105,6 +113,48 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                 }
             }
 
+            // ── Look ─────────────────────────────────────────────────────
+            item {
+                Section(title = "Look") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ThemeMode.entries.forEach { mode ->
+                            val selected = mode == look.mode
+                            val bg by animateColorAsState(
+                                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                                label = "themeBg",
+                            )
+                            val fg by animateColorAsState(
+                                if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                label = "themeFg",
+                            )
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(bg)
+                                    .clickable { vm.setTheme(mode) }
+                                    .padding(vertical = 14.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(mode.label, color = fg, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Black & white", fontWeight = FontWeight.Medium)
+                            Text(
+                                "Grayscale icons and no color accents",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                            )
+                        }
+                        Switch(checked = look.mono, onCheckedChange = { vm.setMono(it) })
+                    }
+                }
+            }
+
             // ── The way back ─────────────────────────────────────────────
             item {
                 Section(
@@ -121,7 +171,7 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                         Text(
                             "Cascade isn't your home screen right now, so your old one is already active.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Accent,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     } else if (otherHomes.isEmpty()) {
                         Text("No other home screen app was found on this phone.")
@@ -131,12 +181,12 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                             Modifier.fillMaxWidth().padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Image(home.icon, contentDescription = null, modifier = Modifier.size(36.dp))
+                            Image(home.icon, contentDescription = null, colorFilter = look.iconFilter, modifier = Modifier.size(36.dp))
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(home.label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
                                 if (home.packageName == previousHome) {
-                                    Text("Your previous home screen", fontSize = 12.sp, color = Accent)
+                                    Text("Your previous home screen", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                             if (isDefaultHome) {
@@ -218,7 +268,7 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                     }
                     favorites.forEachIndexed { index, app ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Image(app.icon, contentDescription = null, modifier = Modifier.size(30.dp))
+                            Image(app.icon, contentDescription = null, colorFilter = look.iconFilter, modifier = Modifier.size(30.dp))
                             Spacer(Modifier.width(12.dp))
                             Text(app.label, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             IconButton(onClick = { vm.moveFavorite(app.key, -1) }, enabled = index > 0) {
@@ -239,7 +289,7 @@ fun SettingsScreen(vm: LauncherViewModel, resumeTick: Int, onBack: () -> Unit) {
                 Text(
                     "Tip: long-press the clock to open these settings. Tap it to open your alarms.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
                 )
             }
@@ -256,7 +306,12 @@ private fun Section(
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (highlight) Color(0xFF1E2A3A) else MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = if (highlight) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                    .compositeOver(MaterialTheme.colorScheme.surfaceVariant)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
         ),
         modifier = Modifier.fillMaxWidth(),
     ) {
