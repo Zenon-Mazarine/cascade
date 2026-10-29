@@ -1,0 +1,124 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preSideloadBuild UP-TO-DATE
+> Task :app:mergeSideloadJniLibFolders
+> Task :app:mergeSideloadNativeLibs
+> Task :app:buildKotlinToolingMetadata
+
+> Task :app:stripSideloadDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so. Run with --info option to learn more.
+
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:extractSideloadNativeSymbolTables
+> Task :app:generateSideloadBuildConfig
+> Task :app:mergeSideloadNativeDebugMetadata NO-SOURCE
+> Task :app:checkSideloadDuplicateClasses
+> Task :app:generateSideloadResValues
+> Task :app:checkSideloadAarMetadata
+> Task :app:mapSideloadSourceSetPaths
+> Task :app:generateSideloadResources
+> Task :app:packageSideloadResources
+> Task :app:mergeSideloadResources
+> Task :app:createSideloadCompatibleScreenManifests
+> Task :app:extractDeepLinksSideload
+> Task :app:parseSideloadLocalResources
+> Task :app:processSideloadMainManifest
+> Task :app:processSideloadManifest
+> Task :app:processSideloadManifestForPackage
+> Task :app:javaPreCompileSideload
+> Task :app:mergeSideloadArtProfile
+> Task :app:extractProguardFiles
+> Task :app:mergeSideloadStartupProfile
+> Task :app:mergeSideloadShaders
+> Task :app:compileSideloadShaders NO-SOURCE
+> Task :app:generateSideloadAssets UP-TO-DATE
+> Task :app:mergeSideloadAssets
+> Task :app:compressSideloadAssets
+> Task :app:extractSideloadVersionControlInfo
+> Task :app:collectSideloadDependencies
+> Task :app:processSideloadResources
+> Task :app:sdkSideloadDependencyData
+> Task :app:validateSigningSideload
+> Task :app:writeSideloadAppMetadata
+> Task :app:writeSideloadSigningConfigVersions
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:extractReleaseVersionControlInfo
+> Task :app:mergeReleaseShaders
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:mergeReleaseAssets
+> Task :app:generateReleaseBuildConfig
+> Task :app:checkReleaseAarMetadata
+> Task :app:checkReleaseDuplicateClasses
+> Task :app:generateReleaseResValues
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:generateReleaseResources
+> Task :app:packageReleaseResources
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease
+> Task :app:parseReleaseLocalResources
+> Task :app:processReleaseMainManifest
+> Task :app:processReleaseManifest
+> Task :app:javaPreCompileRelease
+> Task :app:processReleaseManifestForPackage
+> Task :app:mergeReleaseResources
+> Task :app:mergeReleaseArtProfile
+> Task :app:mergeReleaseStartupProfile
+> Task :app:mergeReleaseJniLibFolders
+> Task :app:mergeReleaseNativeLibs
+> Task :app:writeReleaseAppMetadata
+
+> Task :app:stripReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so. Run with --info option to learn more.
+
+> Task :app:collectReleaseDependencies
+> Task :app:configureReleaseDependencies
+> Task :app:extractReleaseNativeSymbolTables
+> Task :app:validateSigningRelease
+> Task :app:parseReleaseIntegrityConfig
+> Task :app:processReleaseResources
+> Task :app:compileSideloadKotlin
+> Task :app:compileReleaseKotlin
+w: file:///home/runner/work/cascade/cascade/app/src/main/java/com/bidule/cascade/NotificationService.kt:101:49 'static field MODE_BACKGROUND_ACTIVITY_START_ALLOWED: Int' is deprecated. Deprecated in Java.
+
+> Task :app:compileSideloadKotlin
+w: file:///home/runner/work/cascade/cascade/app/src/main/java/com/bidule/cascade/NotificationService.kt:101:49 'static field MODE_BACKGROUND_ACTIVITY_START_ALLOWED: Int' is deprecated. Deprecated in Java.
+
+> Task :app:compileReleaseJavaWithJavac
+> Task :app:compileSideloadJavaWithJavac
+> Task :app:mergeSideloadGeneratedProguardFiles
+> Task :app:processSideloadJavaRes
+> Task :app:generateSideloadLintVitalReportModel
+> Task :app:mergeSideloadJavaResource
+> Task :app:expandSideloadArtProfileWildcards
+> Task :app:mergeReleaseGeneratedProguardFiles
+> Task :app:processReleaseJavaRes
+> Task :app:expandReleaseArtProfileWildcards
+> Task :app:generateReleaseLintVitalReportModel
+> Task :app:mergeReleaseJavaResource
+> Task :app:lintVitalAnalyzeSideload
+> Task :app:minifySideloadWithR8
+> Task :app:lintVitalAnalyzeRelease
+> Task :app:lintVitalReportSideload
+> Task :app:lintVitalReportRelease
+> Task :app:lintVitalSideload
+> Task :app:lintVitalRelease
+> Task :app:convertShrunkResourcesToBinarySideload
+> Task :app:compileSideloadArtProfile
+> Task :app:optimizeSideloadResources
+> Task :app:packageSideload
+> Task :app:createSideloadApkListingFileRedirect
+> Task :app:assembleSideload
+> Task :app:minifyReleaseWithR8
+> Task :app:buildReleasePreBundle
+> Task :app:compileReleaseArtProfile
+> Task :app:packageReleaseBundle
+> Task :app:signReleaseBundle
+> Task :app:produceReleaseBundleIdeListingFile
+> Task :app:createReleaseBundleListingFileRedirect
+> Task :app:bundleRelease
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/build-1793304087508.json
+
+BUILD SUCCESSFUL in 3m 36s
+96 actionable tasks: 96 executed
