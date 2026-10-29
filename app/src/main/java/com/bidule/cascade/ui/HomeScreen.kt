@@ -203,7 +203,7 @@ fun HomeScreen(
     )
 
     // Pressing Home while already home closes whatever is open.
-    LaunchedEffect(homeTick) { closeAll() }
+    LaunchedEffect(homeTick) { if (homeTick > 0) closeAll() }
     // A home screen has nowhere to go back to: swallow Back, or use it to close overlays.
     BackHandler {
         when {

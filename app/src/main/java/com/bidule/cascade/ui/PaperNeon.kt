@@ -89,11 +89,11 @@ fun PaperHome(
             )
         }
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Fixed(3),
             modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(pull),
-            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.Bottom),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.Bottom),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             itemsIndexed(favorites, key = { _, a -> a.key }) { i, app ->
                 CascadeIn(i, resumeTick, Modifier.animateItem()) {
@@ -136,14 +136,14 @@ private fun PaperCard(
     Box(
         Modifier
             .fillMaxWidth()
-            .aspectRatio(1.1f)
+            .aspectRatio(0.92f)
             .graphicsLayer {
                 rotationZ = tilt * (1f - fold)
                 rotationY = -fold * 16f
                 cameraDistance = 14f * density
             }
             .drawBehind {
-                val corner = 26.dp.toPx() * (1f + fold * 0.6f)
+                val corner = 20.dp.toPx() * (1f + fold * 0.6f)
                 val w = size.width
                 val h = size.height
                 // Shadow.
@@ -187,11 +187,11 @@ private fun PaperCard(
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(10.dp)) {
-            Image(app.icon, contentDescription = app.label, colorFilter = look.iconFilter, modifier = Modifier.size(44.dp))
-            Spacer(Modifier.height(10.dp))
+            Image(app.icon, contentDescription = app.label, colorFilter = look.iconFilter, modifier = Modifier.size(38.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
                 app.label,
-                style = look.style(13.sp, color = ink).copy(shadow = null),
+                style = look.style(12.sp, color = ink).copy(shadow = null),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,

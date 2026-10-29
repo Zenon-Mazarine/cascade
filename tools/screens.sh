@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Installs Cascade on the running emulator and screenshots each style.
 set -x
 mkdir -p shots
 adb install -r app/build/outputs/apk/release/app-release.apk
@@ -13,15 +12,7 @@ shot() {
   sleep 7
   adb exec-out screencap -p > "shots/$name.png"
 }
-shot stone-light --ez cascade_demo true --es cascade_style Stone --es cascade_theme Light
-shot stone-dark --es cascade_style Stone --es cascade_theme Dark
-shot paper-light --es cascade_style Paper --es cascade_theme Light
-shot paper-dark --es cascade_style Paper --es cascade_theme Dark
-shot neon-dark --es cascade_style Neon --es cascade_theme Dark
-shot neon-wallpaper --es cascade_style Neon --es cascade_theme Wallpaper
-shot cosmos-dark --es cascade_style Cosmos --es cascade_theme Dark
-shot cosmos-light --es cascade_style Cosmos --es cascade_theme Light
+shot paper-light --ez cascade_demo true --es cascade_style Paper --es cascade_theme Light
 shot picker --es cascade_style Water --es cascade_theme Dark --ez cascade_picker true
-shot water-dark --es cascade_style Water --es cascade_theme Dark
-shot ink-light --es cascade_style Ink --es cascade_theme Light
+shot picker-ink --es cascade_style Ink --es cascade_theme Light --ez cascade_picker true
 ls -la shots
