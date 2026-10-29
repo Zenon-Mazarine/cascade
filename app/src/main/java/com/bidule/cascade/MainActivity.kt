@@ -191,14 +191,6 @@ private fun CascadeApp(
         }
     }
     var lastOrigin by remember { mutableStateOf(Offset.Zero) }
-    LaunchedEffect(Unit) {
-        val target = DebugFlags.switchTo?.let { n -> CascadeStyle.entries.firstOrNull { it.name == n } }
-        if (target != null) {
-            DebugFlags.switchTo = null
-            delay(2500)
-            animateTo(Offset(DebugFlags.switchX, DebugFlags.switchY), target)
-        }
-    }
 
     // A preview just ran out: go back to the free style and say so.
     LaunchedEffect(locked) {
@@ -236,6 +228,16 @@ private fun CascadeApp(
             paywallFor = target
         } else {
             animateTo(origin, target)
+        }
+    }
+
+    // Footage capture only (screenshot builds).
+    LaunchedEffect(Unit) {
+        val target = DebugFlags.switchTo?.let { n -> CascadeStyle.entries.firstOrNull { it.name == n } }
+        if (target != null) {
+            DebugFlags.switchTo = null
+            delay(2500)
+            animateTo(Offset(DebugFlags.switchX, DebugFlags.switchY), target)
         }
     }
 
