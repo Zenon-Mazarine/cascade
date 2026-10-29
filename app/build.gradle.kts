@@ -25,6 +25,7 @@ android {
         versionName = "1.0.$buildNumber"
         buildConfigField("boolean", "SCREENSHOT_MODE", screenshotMode.toString())
         buildConfigField("boolean", "ALL_UNLOCKED", "false")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -91,4 +92,11 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
     implementation("com.android.billingclient:billing:8.3.0")
+
+    // Frame-by-frame capture of the real UI for the ads (tools/footage.sh).
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit-ktx:1.2.1")
 }
