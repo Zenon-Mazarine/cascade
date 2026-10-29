@@ -722,9 +722,9 @@ private fun ClockHeader(resumeTick: Int, onLongPress: () -> Unit, onSwitchStyle:
     val context = LocalContext.current
     val look = LocalLook.current
     // Re-keyed on resume because coroutine delays pause while the phone sleeps.
-    val now by produceState(LocalDateTime.now(), resumeTick) {
+    val now by produceState(com.bidule.cascade.AppClock.now(), resumeTick) {
         while (true) {
-            value = LocalDateTime.now()
+            value = com.bidule.cascade.AppClock.now()
             delay((60 - value.second) * 1000L)
         }
     }

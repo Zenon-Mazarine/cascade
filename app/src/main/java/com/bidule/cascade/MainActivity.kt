@@ -318,3 +318,10 @@ object DebugFlags {
     /** Footage capture: set by the test to play a style switch from a point. */
     val switchRequest = androidx.compose.runtime.mutableStateOf<Pair<CascadeStyle, Offset>?>(null)
 }
+
+/** The time the clock shows. Capture builds pin it to 9:41 so footage matches its status bar. */
+object AppClock {
+    fun now(): java.time.LocalDateTime =
+        if (BuildConfig.SCREENSHOT_MODE && DebugFlags.clean) java.time.LocalDateTime.of(2026, 10, 29, 9, 41)
+        else java.time.LocalDateTime.now()
+}
