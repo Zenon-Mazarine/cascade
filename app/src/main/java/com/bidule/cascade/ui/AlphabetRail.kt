@@ -44,6 +44,7 @@ fun AlphabetRail(
     onLetter: (Char) -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
+    onBookmarks: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val look = LocalLook.current
@@ -122,6 +123,9 @@ fun AlphabetRail(
             }
         }
 
+        IconButton(onClick = onBookmarks, modifier = Modifier.size(RailWidth)) {
+            Icon(BookmarkIcon, contentDescription = "Bookmarks", tint = look.accent)
+        }
         IconButton(onClick = onSettings, modifier = Modifier.size(RailWidth)) {
             Icon(Icons.Filled.Settings, contentDescription = "Cascade settings", tint = look.text.copy(alpha = 0.85f))
         }

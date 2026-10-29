@@ -52,6 +52,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -100,30 +101,43 @@ fun HomeScreen(
 
     val apps by vm.apps.collectAsStateWithLifecycle()
     val favoriteKeys by vm.favorites.collectAsStateWithLifecycle()
+    val bookmarkKeys by vm.bookmarks.collectAsStateWithLifecycle()
     val notifications by NotificationStore.state.collectAsStateWithLifecycle()
 
     val appsByKey = remember(apps) { apps.associateBy { it.key } }
     val favorites = remember(appsByKey, favoriteKeys) { favoriteKeys.mapNotNull { appsByKey[it] } }
+    val bookmarked = remember(appsByKey, bookmarkKeys) { bookmarkKeys.mapNotNull { appsByKey[it] } }
     val letters = remember(apps) { apps.map { it.letter }.distinct() }
     val isDefaultHome = remember(resumeTick) { HomeUtils.isDefaultHome(context) }
 
     var panelLetter by remember { mutableStateOf<Char?>(null) }
     var searchOpen by remember { mutableStateOf(false) }
+    var folderOpen by remember { mutableStateOf(false) }
+    var folderEditing by remember { mutableStateOf(false) }
+    var folderOpens by remember { mutableIntStateOf(0) }
+    var pickerOpen by remember { mutableStateOf(false) }
+
+    fun closeAll() {
+        panelLetter = null
+        searchOpen = false
+        folderOpen = false
+        folderEditing = false
+        pickerOpen = false
+    }
 
     // Pressing Home while already home closes whatever is open.
-    LaunchedEffect(homeTick) {
-        panelLetter = null
-        searchOpen = false
-    }
+    LaunchedEffect(homeTick) { closeAll() }
     // A home screen has nowhere to go back to: swallow Back, or use it to close overlays.
     BackHandler {
-        panelLetter = null
-        searchOpen = false
+        when {
+            pickerOpen -> pickerOpen = false
+            folderEditing -> folderEditing = false
+            else -> closeAll()
+        }
     }
 
     val launch: (AppEntry) -> Unit = { app ->
-        panelLetter = null
-        searchOpen = false
+        closeAll()
         AppRepository.launch(context, app)
     }
     val rowFor: @Composable (AppEntry, Boolean) -> Unit = { app, big ->
@@ -135,6 +149,8 @@ fun HomeScreen(
             onLaunch = launch,
             onToggleFavorite = vm::toggleFavorite,
             onMove = vm::moveFavorite,
+            isBookmarked = app.key in bookmarkKeys,
+            onToggleBookmark = vm::toggleBookmark,
         )
     }
 
@@ -162,9 +178,10 @@ fun HomeScreen(
     }
 
     val panelOpen = panelLetter != null
-    val listAlpha by animateFloatAsState(if (panelOpen || searchOpen) 0.25f else 1f, Motion.soft, label = "dim")
+    val anyOverlay = panelOpen || searchOpen || folderOpen || pickerOpen
+    val listAlpha by animateFloatAsState(if (anyOverlay) 0.25f else 1f, Motion.soft, label = "dim")
     val listBlur by animateDpAsState(
-        if (panelOpen || searchOpen) 14.dp else 0.dp,
+        if (anyOverlay) 14.dp else 0.dp,
         spring(stiffness = Spring.StiffnessMediumLow),
         label = "blur",
     )
@@ -206,14 +223,18 @@ fun HomeScreen(
         }
 
         // Tap anywhere outside the panel to close it.
-        if (panelOpen) {
+        if (panelOpen || folderOpen) {
             Box(
                 Modifier
                     .fillMaxSize()
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                    ) { panelLetter = null }
+                    ) {
+                        panelLetter = null
+                        folderOpen = false
+                        folderEditing = false
+                    }
             )
         }
 
@@ -233,10 +254,33 @@ fun HomeScreen(
             LetterPanel(letter = shown, apps = apps, row = { rowFor(it, false) })
         }
 
+        AnimatedVisibility(
+            visible = folderOpen,
+            enter = fadeIn(Motion.soft) +
+                scaleIn(Motion.bouncy, initialScale = 0.8f, transformOrigin = TransformOrigin(1f, 1f)),
+            exit = fadeOut(tween(160)) +
+                scaleOut(tween(180), targetScale = 0.9f, transformOrigin = TransformOrigin(1f, 1f)),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = RailWidth + 10.dp, bottom = 28.dp),
+        ) {
+            BookmarksPanel(
+                apps = bookmarked,
+                editing = folderEditing,
+                openCount = folderOpens,
+                onToggleEdit = { folderEditing = !folderEditing },
+                onLaunch = launch,
+                onRemove = vm::toggleBookmark,
+                onAdd = { pickerOpen = true },
+            )
+        }
+
         AlphabetRail(
             letters = letters,
             active = panelLetter,
             onLetter = { c ->
+                folderOpen = false
+                folderEditing = false
                 if (c != panelLetter) {
                     panelLetter = c
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -244,6 +288,17 @@ fun HomeScreen(
             },
             onSearch = { searchOpen = true },
             onSettings = onOpenSettings,
+            onBookmarks = {
+                panelLetter = null
+                if (folderOpen) {
+                    folderOpen = false
+                    folderEditing = false
+                } else {
+                    folderOpens++
+                    folderOpen = true
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+            },
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .width(RailWidth)
@@ -256,6 +311,22 @@ fun HomeScreen(
             exit = fadeOut(tween(150)) + slideOutVertically(tween(200)) { it / 8 },
         ) {
             SearchOverlay(apps = apps, onLaunch = launch, onClose = { searchOpen = false }, row = { rowFor(it, false) })
+        }
+
+        AnimatedVisibility(
+            visible = pickerOpen,
+            enter = fadeIn(Motion.soft) + slideInVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) { it / 6 },
+            exit = fadeOut(tween(150)) + slideOutVertically(tween(200)) { it / 8 },
+        ) {
+            BookmarkPicker(
+                apps = apps,
+                selected = bookmarkKeys,
+                onToggle = vm::toggleBookmark,
+                onDone = {
+                    pickerOpen = false
+                    folderOpens++
+                },
+            )
         }
     }
 }

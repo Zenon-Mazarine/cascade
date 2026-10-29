@@ -13,6 +13,13 @@ class Prefs(context: Context) {
             sp.edit().putString(KEY_FAVORITES, value.orEmpty().joinToString("|")).apply()
         }
 
+    /** Apps in the bookmarks folder, as flattened component names, in display order. */
+    var bookmarks: List<String>
+        get() = sp.getString(KEY_BOOKMARKS, null)?.split("|")?.filter { it.isNotBlank() }.orEmpty()
+        set(value) {
+            sp.edit().putString(KEY_BOOKMARKS, value.joinToString("|")).apply()
+        }
+
     /** Package of the home screen that was active before Cascade took over. */
     var previousHome: String?
         get() = sp.getString(KEY_PREVIOUS_HOME, null)
@@ -34,6 +41,7 @@ class Prefs(context: Context) {
 
     private companion object {
         const val KEY_THEME = "theme"
+        const val KEY_BOOKMARKS = "bookmarks"
         const val KEY_MONO = "mono"
         const val KEY_FAVORITES = "favorites"
         const val KEY_PREVIOUS_HOME = "previous_home"

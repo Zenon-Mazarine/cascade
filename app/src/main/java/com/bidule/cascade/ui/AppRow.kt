@@ -71,6 +71,8 @@ fun AppRow(
     onLaunch: (AppEntry) -> Unit,
     onToggleFavorite: (String) -> Unit,
     onMove: ((String, Int) -> Unit)? = null,
+    isBookmarked: Boolean = false,
+    onToggleBookmark: ((String) -> Unit)? = null,
 ) {
     val look = LocalLook.current
     val context = LocalContext.current
@@ -159,6 +161,12 @@ fun AppRow(
             if (isFavorite && onMove != null) {
                 DropdownMenuItem(text = { Text("Move up") }, onClick = { onMove(app.key, -1); menuOpen = false })
                 DropdownMenuItem(text = { Text("Move down") }, onClick = { onMove(app.key, 1); menuOpen = false })
+            }
+            if (onToggleBookmark != null) {
+                DropdownMenuItem(
+                    text = { Text(if (isBookmarked) "Remove from bookmarks" else "Add to bookmarks") },
+                    onClick = { onToggleBookmark(app.key); menuOpen = false },
+                )
             }
             DropdownMenuItem(
                 text = { Text("App info") },

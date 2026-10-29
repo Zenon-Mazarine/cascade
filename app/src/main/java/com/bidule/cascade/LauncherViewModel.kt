@@ -29,6 +29,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _favorites = MutableStateFlow(prefs.favorites.orEmpty())
     val favorites: StateFlow<List<String>> = _favorites.asStateFlow()
 
+    private val _bookmarks = MutableStateFlow(prefs.bookmarks)
+    val bookmarks: StateFlow<List<String>> = _bookmarks.asStateFlow()
+
+    fun toggleBookmark(key: String) {
+        val current = _bookmarks.value
+        val next = if (key in current) current - key else current + key
+        _bookmarks.value = next
+        prefs.bookmarks = next
+    }
+
     private val _themeMode = MutableStateFlow(
         ThemeMode.entries.firstOrNull { it.name == prefs.theme } ?: ThemeMode.Wallpaper
     )
